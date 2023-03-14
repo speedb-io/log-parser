@@ -1,0 +1,4 @@
+output_files/*
+.idea/*
+!baseline_logs/*
+!test/input_files/*
