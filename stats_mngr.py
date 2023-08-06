@@ -983,6 +983,7 @@ class StatsMngr:
         COUNTERS = auto()
 
     def __init__(self):
+        self.dump_stats_entry_found = False
         self.db_wide_stats_mngr = DbWideStatsMngr()
         self.compaction_stats_mngr = CompactionStatsMngr()
         self.blob_stats_mngr = BlobStatsMngr()
@@ -1073,23 +1074,38 @@ class StatsMngr:
         cf_names_found = set()
         entry_idx = start_entry_idx
 
-        # Our entries starts with the "------- DUMPING STATS -------" entry
-        if not StatsMngr.is_dump_stats_start(log_entries[entry_idx]):
+        # A stats entry starts with the
+        # "------- DUMPING STATS -------" entry, however, there may be
+        # unrelated entries between this entry and the entry with
+        # the actual stats (the one starting with "DB Stats").
+        dump_stats_entry_found_now = False
+        if StatsMngr.is_dump_stats_start(log_entries[entry_idx]):
+            logging.debug(
+                f"Found Stats Dump Entry Start ("
+                f"{format_line_num_from_entry(log_entries[entry_idx])}")
+            self.dump_stats_entry_found = True
+            dump_stats_entry_found_now = True
+            entry_idx += 1
+        elif not self.dump_stats_entry_found:
             return False, entry_idx, cf_names_found
-
-        logging.debug(f"Parsing Stats Dump Entry ("
-                      f"{format_line_num_from_entry(log_entries[entry_idx])}")
-
-        entry_idx += 1
 
         db_stats_entry = log_entries[entry_idx]
         db_stats_lines = \
             utils.remove_empty_lines_at_start(
                 db_stats_entry.get_msg_lines())
         db_stats_time = db_stats_entry.get_time()
-        # "** DB Stats **" must be next (allowing empty lines until it arrives)
-        assert len(db_stats_lines) > 0
-        assert DbWideStatsMngr.is_start_line(db_stats_lines[0])
+
+        # Now check if the actual stats follow immediately, or, if not, wait
+        # for a later entry with the actual stats
+        if len(db_stats_lines) == 0 or \
+                not DbWideStatsMngr.is_start_line(db_stats_lines[0]):
+            # Found the start => return True
+            return dump_stats_entry_found_now, entry_idx, cf_names_found
+
+        # "** DB Stats **" is immediately following "DUMP STATS"
+        logging.debug(f"Parsing Stats Dump Entry ("
+                      f"{format_line_num_from_entry(log_entries[entry_idx])}")
+        self.dump_stats_entry_found = False
 
         def log_parsing_error(msg_prefix):
             logging.error(format_err_msg(
