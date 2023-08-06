@@ -487,8 +487,8 @@ def test_compaction_stats_mngr():
 
     assert mngr.get_cf_size_bytes_at_end("default") is None
 
-    mngr.add_lines(time, "default", lines_level)
-    mngr.add_lines(time, "CF1", lines_priority)
+    mngr.add_lines(time, "default", lines_level, 0)
+    mngr.add_lines(time, "CF1", lines_priority, 0)
 
     assert mngr.get_cf_size_bytes_at_end("default") == \
            utils.get_num_bytes_from_human_readable_components("82.43", "GB")
@@ -640,7 +640,7 @@ def test_compactions_stats_mngr():
     level0_key = 'LEVEL-0'
     sum_key = "SUM"
     mngr = CompactionStatsMngr()
-    mngr.add_lines(time, cf_name, stats_lines)
+    mngr.add_lines(time, cf_name, stats_lines, 0)
     entries = mngr.get_cf_level_entries(cf_name)
     assert isinstance(entries, list)
     assert len(entries) == 1
