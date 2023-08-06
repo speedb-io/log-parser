@@ -361,6 +361,103 @@ def test_stats_mngr():
            (True, expected_entry_idx, expected_cfs_names_found)
 
 
+def test_stats_mngr_non_contig_entries_1():
+    lines = \
+'''2023/07/18-19:27:01.889729 27127 [/db_impl/db_impl.cc:1084] ------- DUMPING STATS -------
+2023/07/18-19:27:01.889745 26641 [/column_family.cc:1044] [default] Increasing compaction threads because of estimated pending compaction bytes 18555651178
+2023/07/18-19:27:01.890259 27127 [/db_impl/db_impl.cc:1086] 
+** DB Stats **
+Uptime(secs): 0.7 total, 0.7 interval
+Cumulative writes: 0 writes, 0 keys, 0 commit groups, 0.0 writes per commit group, ingest: 0.00 GB, 0.00 MB/s
+Cumulative WAL: 0 writes, 0 syncs, 0.00 writes per sync, written: 0.00 GB, 0.00 MB/s
+Cumulative stall: 00:00:0.000 H:M:S, 0.0 percent
+Interval writes: 0 writes, 0 keys, 0 commit groups, 0.0 writes per commit group, ingest: 0.00 MB, 0.00 MB/s
+Interval WAL: 0 writes, 0 syncs, 0.00 writes per sync, written: 0.00 GB, 0.00 MB/s
+Interval stall: 00:00:0.000 H:M:S, 0.0 percent
+Write Stall (count): write-buffer-manager-limit-stops: 0,
+ ** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      2/0   322.40 MB   1.3      0.0     0.0      0.0       0.1      0.1       0.0   1.0      0.0    594.4      0.12              0.00         1    0.120       0      0       0.0       0.0
+  L1      6/1   350.91 MB   1.1      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0       0.0       0.0
+  L2     59/11   3.16 GB   1.1      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0       0.0       0.0
+  L3    487/28  27.78 GB   1.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0       0.0       0.0
+  L4    166/0   10.17 GB   0.0      0.0     0.0      0.0       0.0      0.0       0.2   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0       0.0       0.0
+ Sum    720/40  41.77 GB   0.0      0.0     0.0      0.0       0.1      0.1       0.2   1.0      0.0    594.4      0.12              0.00         1    0.120       0      0       0.0       0.0
+ Int      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.1      0.1       0.2   1.0      0.0    594.4      0.12              0.00         1    0.120       0      0       0.0       0.0
+'''.splitlines() # noqa
+
+    entries = lines_to_entries(lines)
+
+    mngr = StatsMngr()
+
+    expected_entry_idx = 1
+    expected_cfs_names_found = set()
+    assert mngr.try_adding_entries(entries, start_entry_idx=0) == \
+           (True, expected_entry_idx, expected_cfs_names_found)
+
+    assert mngr.try_adding_entries(entries, start_entry_idx=1) == \
+           (False, expected_entry_idx, expected_cfs_names_found)
+
+    expected_entry_idx = 3
+    expected_cfs_names_found = {"default"}
+    assert mngr.try_adding_entries(entries, start_entry_idx=2) == \
+           (True, expected_entry_idx, expected_cfs_names_found)
+
+
+def test_stats_mngr_non_contig_entries_2():
+    lines = \
+'''2023/07/18-19:27:01.889729 27127 [/db_impl/db_impl.cc:1084] ------- DUMPING STATS -------
+2023/07/18-19:27:01.889745 26641 [/column_family.cc:1044] [default] Increasing compaction threads because of estimated pending compaction bytes 18555651178
+2023/07/18-19:27:01.889806 26641 (Original Log Time 2023/07/18-19:27:01.887253) [/db_impl/db_impl_compaction_flush.cc:3428] [default] Moving #13947 to level-4 67519682 bytes
+2023/07/18-19:27:01.889746 27127 [/db_impl/db_impl.cc:1084] ------- DUMPING STATS -------
+2023/07/18-19:27:01.890259 27127 [/db_impl/db_impl.cc:1086] 
+** DB Stats **
+Uptime(secs): 0.7 total, 0.7 interval
+Cumulative writes: 0 writes, 0 keys, 0 commit groups, 0.0 writes per commit group, ingest: 0.00 GB, 0.00 MB/s
+Cumulative WAL: 0 writes, 0 syncs, 0.00 writes per sync, written: 0.00 GB, 0.00 MB/s
+Cumulative stall: 00:00:0.000 H:M:S, 0.0 percent
+Interval writes: 0 writes, 0 keys, 0 commit groups, 0.0 writes per commit group, ingest: 0.00 MB, 0.00 MB/s
+Interval WAL: 0 writes, 0 syncs, 0.00 writes per sync, written: 0.00 GB, 0.00 MB/s
+Interval stall: 00:00:0.000 H:M:S, 0.0 percent
+Write Stall (count): write-buffer-manager-limit-stops: 0,
+ ** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      2/0   322.40 MB   1.3      0.0     0.0      0.0       0.1      0.1       0.0   1.0      0.0    594.4      0.12              0.00         1    0.120       0      0       0.0       0.0
+  L1      6/1   350.91 MB   1.1      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0       0.0       0.0
+  L2     59/11   3.16 GB   1.1      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0       0.0       0.0
+  L3    487/28  27.78 GB   1.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0       0.0       0.0
+  L4    166/0   10.17 GB   0.0      0.0     0.0      0.0       0.0      0.0       0.2   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0       0.0       0.0
+ Sum    720/40  41.77 GB   0.0      0.0     0.0      0.0       0.1      0.1       0.2   1.0      0.0    594.4      0.12              0.00         1    0.120       0      0       0.0       0.0
+ Int      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.1      0.1       0.2   1.0      0.0    594.4      0.12              0.00         1    0.120       0      0       0.0       0.0
+'''.splitlines() # noqa
+
+    entries = lines_to_entries(lines)
+
+    mngr = StatsMngr()
+
+    expected_entry_idx = 1
+    expected_cfs_names_found = set()
+    assert mngr.try_adding_entries(entries, start_entry_idx=0) == \
+           (True, expected_entry_idx, expected_cfs_names_found)
+
+    expected_entry_idx = 1
+    expected_cfs_names_found = set()
+    assert mngr.try_adding_entries(entries, start_entry_idx=1) == \
+           (False, expected_entry_idx, expected_cfs_names_found)
+
+    expected_entry_idx = 2
+    expected_cfs_names_found = set()
+    assert mngr.try_adding_entries(entries, start_entry_idx=2) == \
+           (False, expected_entry_idx, expected_cfs_names_found)
+
+    expected_entry_idx = 5
+    expected_cfs_names_found = {"default"}
+    assert mngr.try_adding_entries(entries, start_entry_idx=3) == \
+           (True, expected_entry_idx, expected_cfs_names_found)
+
+
 def test_compaction_stats_mngr():
     lines_level = \
         '''** Compaction Stats [default] **
