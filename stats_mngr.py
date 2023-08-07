@@ -259,17 +259,24 @@ class CompactionStatsMngr:
         self.level_entries = dict()
         self.priority_entries = dict()
 
-    def add_lines(self, time, cf_name, stats_lines):
+    def add_lines(self, time, cf_name, stats_lines, line_num):
         stats_lines = [line.strip() for line in stats_lines]
         assert cf_name == \
                CompactionStatsMngr.parse_start_line(stats_lines[0])
 
-        if stats_lines[1].startswith('Level'):
-            self.parse_level_lines(time, cf_name, stats_lines[1:])
-        elif stats_lines[1].startswith('Priority'):
-            self.parse_priority_lines(time, cf_name, stats_lines[1:])
-        else:
-            assert 0
+        try:
+            if stats_lines[1].startswith('Level'):
+                self.parse_level_lines(time, cf_name, stats_lines[1:])
+            elif stats_lines[1].startswith('Priority'):
+                self.parse_priority_lines(time, cf_name, stats_lines[1:])
+            else:
+                assert 0
+        except utils.ParsingError as e:
+            logging.warning(f"Failed parsing compaction stats lines ({e}) - "
+                            f"Ignoring these lines."
+                            f".\n"
+                            f"time:{time}, cf:{cf_name}, "
+                            f"lines:\n{stats_lines[1:]}")
 
     @staticmethod
     def parse_header_line(header_line, separator_line):
@@ -325,11 +332,13 @@ class CompactionStatsMngr:
             size_units)
 
     def parse_level_lines(self, time, cf_name, stats_lines):
+        if len(stats_lines) < 2:
+            raise utils.ParsingError("Missing lines")
+
         header_fields = CompactionStatsMngr.parse_header_line(stats_lines[0],
                                                               stats_lines[1])
         if header_fields is None:
-            # TODO - Error?
-            return
+            raise utils.ParsingError("Failed parsing compaction stats header")
 
         new_entry = {}
         for line in stats_lines[2:]:
@@ -339,14 +348,14 @@ class CompactionStatsMngr:
             line_type, level_num = \
                 CompactionStatsMngr.determine_line_type(line_fields[0])
             if line_type is None:
-                # TODO - Error
-                return
+                raise utils.ParsingError(
+                    f"Failed determining line type ({line_fields[0]})")
 
             num_files, files_in_comp = \
                 CompactionStatsMngr.parse_files_field(line_fields[1])
             if files_in_comp is None:
-                # TODO - Error
-                return
+                raise utils.ParsingError(
+                    f"Failed parsing files field ({line_fields[1]})")
 
             size_in_units = line_fields[2]
             size_units = line_fields[3]
@@ -1032,17 +1041,17 @@ class StatsMngr:
         stats_lines_to_parse = db_stats_lines[start_line_idx:end_line_idx]
         stats_lines_to_parse = [line.strip() for line in stats_lines_to_parse]
 
+        line_num = entry_start_line_num + start_line_idx + 1
         try:
-            logging.debug(
-                f"Parsing Stats Component ({stats_type.name}) "
-                f"[line# {entry_start_line_num + start_line_idx + 1}]")
+            logging.debug(f"Parsing Stats Component ({stats_type.name}) "
+                          f"[line# {line_num}]")
 
             valid_stats_type = True
             if stats_type == StatsMngr.StatsType.DB_WIDE:
                 self.db_wide_stats_mngr.add_lines(time, stats_lines_to_parse)
             elif stats_type == StatsMngr.StatsType.COMPACTION:
-                self.compaction_stats_mngr.add_lines(time, cf_name,
-                                                     stats_lines_to_parse)
+                self.compaction_stats_mngr.add_lines(
+                    time, cf_name, stats_lines_to_parse, line_num)
             elif stats_type == StatsMngr.StatsType.BLOB:
                 self.blob_stats_mngr.add_lines(time, cf_name,
                                                stats_lines_to_parse)
@@ -1061,7 +1070,7 @@ class StatsMngr:
             logging.exception(format_err_msg(
                 f"Error parsing a Stats Entry. time:{time}, cf:{cf_name}" +
                 str(ErrContext(**{
-                    "log_line_idx": entry_start_line_num + start_line_idx,
+                    "log_line_idx": line_num - 1,
                     "log_line": db_stats_lines[start_line_idx]
                 }))))
 
