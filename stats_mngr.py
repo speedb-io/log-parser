@@ -345,6 +345,14 @@ class CompactionStatsMngr:
             line_fields = line.strip().split()
             if not line_fields:
                 continue
+            if len(line_fields) != len(header_fields) + 1:
+                logging.error(
+                    f"Expected #{len(header_fields) + 1} fields in line, "
+                    f"when there are {len(line_fields)} in compaction level "
+                    f"stats. time:{time}, cf:{cf_name}.\n"
+                    f"line:{line}")
+                return
+
             line_type, level_num = \
                 CompactionStatsMngr.determine_line_type(line_fields[0])
             if line_type is None:
