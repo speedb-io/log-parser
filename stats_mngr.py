@@ -882,7 +882,9 @@ class BlockCacheStatsMngr:
 
     def parse_global_entry_stats_line(self, time, cache_id, line):
         line_parts = re.findall(regexes.BLOCK_CACHE_ENTRY_STATS, line)
-        assert line_parts and len(line_parts) == 1
+        if not line_parts or len(line_parts) != 1:
+            raise utils.ParsingError(f"Error parsing line.time:{time}, "
+                                     f"line:\n{line}")
 
         roles, roles_stats = BlockCacheStatsMngr.parse_entry_stats_line(
             line_parts[0])
@@ -936,10 +938,9 @@ class BlockCacheStatsMngr:
         roles_stats = re.findall(regexes.BLOCK_CACHE_ENTRY_ROLES_STATS,
                                  line)
         if len(roles) != len(roles_stats):
-            assert False, str(ParsingAssertion(
+            raise utils.ParsingError(
                 f"Error Parsing block cache stats line. "
-                f"roles:{roles}, roles_stats:{roles_stats}",
-                ErrContext(**{'log_line': line})))
+                f"roles:{roles}, roles_stats:{roles_stats}, line:\n{line}")
 
         return roles, roles_stats
 
