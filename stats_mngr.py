@@ -270,7 +270,7 @@ class CompactionStatsMngr:
             elif stats_lines[1].startswith('Priority'):
                 self.parse_priority_lines(time, cf_name, stats_lines[1:])
             else:
-                assert 0
+                raise utils.ParsingError("Unrecognized Compaction Stats Type")
         except utils.ParsingError as e:
             logging.warning(f"Failed parsing compaction stats lines ({e}) - "
                             f"Ignoring these lines."
