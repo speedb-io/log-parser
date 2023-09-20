@@ -211,8 +211,10 @@ def calc_delete_opers_stats(cfs_names, events_mngr):
             stats.total_num_deletes += cf_stats.total_num_deletes
         else:
             # arbitrarily use the first reason for all
-            assert cf_stats.unavailability_reason is not None
-            unavailability_reason = cf_stats.unavailability_reason
+            if cf_stats.unavailability_reason is not None:
+                unavailability_reason = cf_stats.unavailability_reason
+            else:
+                unavailability_reason = "Unknown"
 
     if not has_any_data:
         return DeleteOpersStats(unavailability_reason=unavailability_reason)
