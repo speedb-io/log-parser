@@ -860,15 +860,25 @@ class BlockCacheStatsMngr:
         if len(db_stats_lines) < 2:
             return
 
-        cache_id = self.parse_cache_id_line(db_stats_lines[0])
-        self.parse_global_entry_stats_line(time, cache_id, db_stats_lines[1])
-        if len(db_stats_lines) > 2:
-            self.parse_cf_entry_stats_line(time, cache_id, db_stats_lines[2])
-        return cache_id
+        try:
+            cache_id = self.parse_cache_id_line(db_stats_lines[0])
+            self.parse_global_entry_stats_line(time, cache_id, db_stats_lines[1])
+            if len(db_stats_lines) > 2:
+                self.parse_cf_entry_stats_line(time, cache_id, db_stats_lines[2])
+            return cache_id
+        except utils.ParsingError as e:
+            logging.warning(f"Failed parsing Block Cache stats lines ({e}) - "
+                            f"Ignoring these lines."
+                            f".\n"
+                            f"time:{time}, cf:{cf_name}, "
+                            f"lines:\n{db_stats_lines}")
 
     def parse_cache_id_line(self, line):
         line_parts = re.findall(regexes.BLOCK_CACHE_STATS_START, line)
-        assert line_parts and len(line_parts) == 1 and len(line_parts[0]) == 3
+        if not line_parts:
+            raise utils.ParsingError("Failed parsing cache id line")
+
+        assert len(line_parts) == 1 and len(line_parts[0]) == 3
         cache_id, cache_capacity, capacity_units = line_parts[0]
         capacity_bytes = utils.\
             get_num_bytes_from_human_readable_components(cache_capacity,
@@ -882,7 +892,11 @@ class BlockCacheStatsMngr:
 
     def parse_global_entry_stats_line(self, time, cache_id, line):
         line_parts = re.findall(regexes.BLOCK_CACHE_ENTRY_STATS, line)
-        assert line_parts and len(line_parts) == 1
+        if not line_parts:
+            raise utils.ParsingError("Failed Parsing Block Cache Stats")
+        if not line_parts or len(line_parts) != 1:
+
+            raise utils.ParsingError("Failed parsing Block Cache Stats Lines")
 
         roles, roles_stats = BlockCacheStatsMngr.parse_entry_stats_line(
             line_parts[0])
