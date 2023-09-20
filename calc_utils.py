@@ -116,6 +116,8 @@ def calc_cfs_size_bytes_growth(cfs_names, compaction_stats_mngr):
     for cf_name in end_cf_names:
         if cf_name not in growth:
             growth[cf_name] = {}
+        if growth[cf_name] is None:
+            growth[cf_name] = {}
         end_cf_level_sizes = end_per_cf_and_level_sizes_bytes[cf_name]
         if end_cf_level_sizes:
             for level in end_cf_level_sizes:
