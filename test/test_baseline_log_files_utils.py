@@ -101,7 +101,7 @@ def test_find_closest_baseline_log_file():
         ("8.0.0", utils.ProductName.ROCKSDB,
          "LOG-rocksdb-8.0.0", "8.0.0"),
         ("9.0.0", utils.ProductName.ROCKSDB,
-         "LOG-rocksdb-8.0.0", "8.0.0")
+         "LOG-rocksdb-8.5.3", "8.5.3")
     ]
 
     for version_info in versions_to_test_info:
