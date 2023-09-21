@@ -862,9 +862,11 @@ class BlockCacheStatsMngr:
 
         try:
             cache_id = self.parse_cache_id_line(db_stats_lines[0])
-            self.parse_global_entry_stats_line(time, cache_id, db_stats_lines[1])
+            self.parse_global_entry_stats_line(time, cache_id,
+                                               db_stats_lines[1])
             if len(db_stats_lines) > 2:
-                self.parse_cf_entry_stats_line(time, cache_id, db_stats_lines[2])
+                self.parse_cf_entry_stats_line(time, cache_id,
+                                               db_stats_lines[2])
             return cache_id
         except utils.ParsingError as e:
             logging.warning(f"Failed parsing Block Cache stats lines ({e}) - "
