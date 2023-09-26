@@ -196,6 +196,7 @@ class CompactionStatsMngr:
         USER = auto()
 
     class LevelFields(str, Enum):
+        NUM_FILES = 'Num-Files'
         SIZE_BYTES = 'size_bytes'
         WRITE_AMP = 'W-Amp'
         COMP_SEC = 'Comp(sec)'
