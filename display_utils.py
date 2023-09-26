@@ -745,57 +745,72 @@ def generate_ascii_table(columns_names, table):
     return f.getvalue()
 
 
-def prepare_cfs_size_bytes_growth_for_display(growth):
-    disp = {}
-    if not growth:
+def get_delta_str(delta_value):
+    abs_delta_str = num_bytes_for_display(abs(delta_value))
+    if delta_value >= 0:
+        return f"(+{abs_delta_str})"
+    else:
+        return f"(-{abs_delta_str})"
+
+
+def get_growth_str(start_size_bytes, end_size_bytes, end_num_files):
+    start_size_str = num_bytes_for_display(start_size_bytes)
+
+    if end_size_bytes is not None:
+        if start_size_bytes == end_size_bytes:
+            if start_size_bytes > 0:
+                value_str = f"{start_size_str} (No Change) " \
+                            f"  [{end_num_files} Files]"
+            else:
+                value_str = "Empty Level"
+        else:
+            end_size_str = num_bytes_for_display(end_size_bytes)
+            delta = end_size_bytes - start_size_bytes
+            delta_str = get_delta_str(delta)
+            value_str = \
+                f"{start_size_str} -> {end_size_str}  {delta_str}" \
+                f"  [{end_num_files} Files]"
+    else:
+        # End size is unknown
+        value_str = f"{start_size_str} -> (UNKNOWN SIZE)"
+
+    return value_str
+
+
+def prepare_total_growth_info_for_display(total_growth_info):
+    assert isinstance(total_growth_info, calc_utils.GrowthInfo)
+
+    if total_growth_info == calc_utils.GrowthInfo():
+        return "Can't Calculate"
+
+    return get_growth_str(total_growth_info.start_size_bytes,
+                          total_growth_info.end_size_bytes,
+                          total_growth_info.end_num_files)
+
+
+def prepare_cfs_growth_info_for_display(cfs_growth_info):
+    cfs_disp = {}
+
+    if not cfs_growth_info:
         return utils.NO_GROWTH_INFO_TEXT
 
-    def get_delta_str(delta_value):
-        abs_delta_str = num_bytes_for_display(abs(delta_value))
-        if delta_value >= 0:
-            return f"(+{abs_delta_str})"
-        else:
-            return f"(-{abs_delta_str})"
-
-    def get_growth_str(start_size_bytes, end_size_bytes, end_num_files):
-        start_size_str = num_bytes_for_display(start_size_bytes)
-
-        if end_size_bytes is not None:
-            if start_size_bytes == end_size_bytes:
-                if start_size_bytes > 0:
-                    value_str = f"{start_size_str} (No Change) " \
-                                f"  [{end_num_files} Files]"
-                else:
-                    value_str = "Empty Level"
-            else:
-                end_size_str = num_bytes_for_display(end_size_bytes)
-                delta = end_size_bytes - start_size_bytes
-                delta_str = get_delta_str(delta)
-                value_str = \
-                    f"{start_size_str} -> {end_size_str}  {delta_str}" \
-                    f"  [{end_num_files} Files]"
-        else:
-            # End size is unknown
-            value_str = f"{start_size_str} -> (UNKNOWN SIZE)"
-
-        return value_str
-
-    for cf_name in growth:
-        if growth[cf_name] is None:
-            disp[cf_name] = utils.NO_GROWTH_INFO_TEXT
+    for cf_name in cfs_growth_info:
+        if cfs_growth_info[cf_name] is None:
+            cfs_disp[cf_name] = utils.NO_GROWTH_INFO_TEXT
             continue
 
-        disp[cf_name] = {}
+        cfs_disp[cf_name] = {}
 
-        if not growth[cf_name]:
-            disp[cf_name] = utils.NO_GROWTH_INFO_TEXT
+        if not cfs_growth_info[cf_name]:
+            cfs_disp[cf_name] = utils.NO_GROWTH_INFO_TEXT
             continue
 
         total_bytes_start = 0
         total_bytes_end = None
         total_num_files = None
+
         # The levels are not ordered within growth[cf_name]
-        levels_and_sizes = list(growth[cf_name].items())
+        levels_and_sizes = list(cfs_growth_info[cf_name].items())
         levels_and_sizes.sort()
 
         for level, growth_info in levels_and_sizes:
@@ -806,27 +821,20 @@ def prepare_cfs_size_bytes_growth_for_display(growth):
             if start_size_bytes is None:
                 start_size_bytes = 0
 
-            disp[cf_name][f"Level {level}"] = \
+            cfs_disp[cf_name][f"Level {level}"] = \
                 get_growth_str(
                     start_size_bytes, end_size_bytes, end_num_files)
 
             total_bytes_start += start_size_bytes
             if end_size_bytes is not None:
-                if total_bytes_end is None:
-                    total_bytes_end = end_size_bytes
-                else:
-                    total_bytes_end += end_size_bytes
+                total_bytes_end = utils.accumulate(total_bytes_end,
+                                                   end_size_bytes)
+            total_num_files = utils.accumulate(total_num_files, end_num_files)
 
-            if end_num_files is not None:
-                if total_num_files is None:
-                    total_num_files = int(end_num_files)
-                else:
-                    total_num_files += int(end_num_files)
-
-        disp[cf_name]["Sum"] =\
+        cfs_disp[cf_name]["Sum"] =\
             get_growth_str(total_bytes_start, total_bytes_end, total_num_files)
 
-    return disp
+    return cfs_disp
 
 
 def prepare_db_ingest_info_for_display(ingest_info):
