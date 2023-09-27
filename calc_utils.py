@@ -100,17 +100,29 @@ def get_per_cf_per_level_num_files(entry_all_cfs):
 
 
 @dataclass
-class CfLevelGrowthInfo:
+class GrowthInfo:
     start_size_bytes: int = None
     start_num_files: int = None
     end_size_bytes: str = None
     end_num_files: int = None
 
+    def add(self, info_to_add):
+        assert isinstance(info_to_add, GrowthInfo)
 
-def calc_cfs_size_bytes_growth(cfs_names, compaction_stats_mngr):
+        self.start_size_bytes = utils.accumulate(self.start_size_bytes,
+                                                 info_to_add.start_size_bytes)
+        self.start_num_files = utils.accumulate(self.start_num_files,
+                                                info_to_add.start_num_files)
+        self.end_size_bytes = utils.accumulate(self.end_size_bytes,
+                                               info_to_add.end_size_bytes)
+        self.end_num_files = utils.accumulate(self.end_num_files,
+                                              info_to_add.end_num_files)
+
+
+def calc_cfs_growth_info(cfs_names, compaction_stats_mngr):
     assert isinstance(compaction_stats_mngr, CompactionStatsMngr)
 
-    growth = {cf_name: None for cf_name in cfs_names}
+    cfs_growth = {cf_name: None for cf_name in cfs_names}
 
     first_entry_all_cfs = compaction_stats_mngr.get_first_level_entry_all_cfs()
     if not first_entry_all_cfs:
@@ -126,12 +138,12 @@ def calc_cfs_size_bytes_growth(cfs_names, compaction_stats_mngr):
 
     start_cf_names = list(start_per_cf_and_level_sizes_bytes.keys())
     for cf_name in start_cf_names:
-        growth[cf_name] = {}
+        cfs_growth[cf_name] = {}
         start_cf_level_sizes = start_per_cf_and_level_sizes_bytes[cf_name]
         if start_cf_level_sizes:
             for level in start_cf_level_sizes:
-                growth[cf_name][level] = \
-                    CfLevelGrowthInfo(
+                cfs_growth[cf_name][level] = \
+                    GrowthInfo(
                         start_cf_level_sizes[level],
                         start_per_cf_and_level_num_files[cf_name][level],
                         None, None)
@@ -142,26 +154,65 @@ def calc_cfs_size_bytes_growth(cfs_names, compaction_stats_mngr):
         get_per_cf_per_level_num_files(last_entry_all_cfs)
     end_cf_names = list(end_per_cf_and_level_sizes_bytes.keys())
     for cf_name in end_cf_names:
-        if cf_name not in growth:
-            growth[cf_name] = {}
-        if growth[cf_name] is None:
-            growth[cf_name] = {}
+        if cf_name not in cfs_growth:
+            cfs_growth[cf_name] = {}
+        if cfs_growth[cf_name] is None:
+            cfs_growth[cf_name] = {}
         end_cf_level_sizes = end_per_cf_and_level_sizes_bytes[cf_name]
         if end_cf_level_sizes:
             for level in end_cf_level_sizes:
-                if level in growth[cf_name]:
-                    start_size_bytes = growth[cf_name][level].start_size_bytes
-                    start_num_files = growth[cf_name][level].start_num_files
+                if level in cfs_growth[cf_name]:
+                    start_size_bytes = \
+                        cfs_growth[cf_name][level].start_size_bytes
+                    start_num_files = \
+                        cfs_growth[cf_name][level].start_num_files
                 else:
                     start_size_bytes = None
                     start_num_files = None
-                growth[cf_name][level] = \
-                    CfLevelGrowthInfo(
+                cfs_growth[cf_name][level] = \
+                    GrowthInfo(
                         start_size_bytes,
                         start_num_files,
                         end_cf_level_sizes[level],
                         end_per_cf_and_level_num_files[cf_name][level])
-    return growth
+    return cfs_growth
+
+
+def calc_total_growth_info(cfs_growth_info):
+    total_growth = GrowthInfo()
+
+    num_cfs = len(cfs_growth_info.keys())
+    num_included_cfs = 0
+
+    for cf_name in cfs_growth_info:
+        if cfs_growth_info[cf_name] is None:
+            continue
+
+        cf_total_growth_info = GrowthInfo()
+        for level, level_growth_info in cfs_growth_info[cf_name].items():
+            assert isinstance(level_growth_info, GrowthInfo)
+            if level_growth_info.start_size_bytes is None:
+                if level_growth_info.end_size_bytes is None:
+                    cf_total_growth_info = None
+                    break
+                elif level_growth_info.end_size_bytes == 0:
+                    cf_total_growth_info.add(GrowthInfo(0, 0, 0, 0))
+                else:
+                    cf_total_growth_info.add(
+                        GrowthInfo(0, 0,
+                                   level_growth_info.end_size_bytes,
+                                   level_growth_info.end_num_files))
+            elif level_growth_info.end_size_bytes is not None:
+                cf_total_growth_info.add(level_growth_info)
+            else:
+                cf_total_growth_info = None
+                break
+
+        if cf_total_growth_info is not None:
+            num_included_cfs += 1
+            total_growth.add(cf_total_growth_info)
+
+    return num_included_cfs, num_cfs, total_growth
 
 
 def calc_cf_table_creation_stats(cf_name, events_mngr):

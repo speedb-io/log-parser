@@ -53,12 +53,24 @@ def get_db_size_json(parsed_log):
     else:
         db_size_json["Ingest"] = utils.DATA_UNAVAILABLE_TEXT
 
-    growth_info = \
-        calc_utils.calc_cfs_size_bytes_growth(cfs_names,
-                                              compactions_stats_mngr)
-    growth_json =\
-        display_utils.prepare_cfs_size_bytes_growth_for_display(growth_info)
-    db_size_json["CF-s Growth"] = growth_json
+    cfs_growth_info = \
+        calc_utils.calc_cfs_growth_info(cfs_names,
+                                        compactions_stats_mngr)
+    num_included_cfs, num_cfs, total_growth_info = \
+        calc_utils.calc_total_growth_info(cfs_growth_info)
+    total_growth_json = \
+        display_utils.prepare_total_growth_info_for_display(total_growth_info)
+    if num_included_cfs == num_cfs:
+        total_growth_key = "Total Growth (For All CF-s)"
+    else:
+        total_growth_key = \
+            f"Total Growth (For {num_included_cfs}/{num_cfs} CF-s)"
+
+        db_size_json[total_growth_key] = total_growth_json
+
+    cfs_growth_json =\
+        display_utils.prepare_cfs_growth_info_for_display(cfs_growth_info)
+    db_size_json["CF-s Growth"] = cfs_growth_json
 
     return db_size_json
 

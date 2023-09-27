@@ -478,3 +478,62 @@ def test_get_cfs_common_and_specific_diff_dicts():
     assert actual_common == {}
     assert actual_dflt == {full_cf_option1_name: (11, 10)}
     assert actual_specific[cf1] is None
+
+
+def test_calc_total_growth_info():
+    total_growth = calc_utils.calc_total_growth_info
+
+    cf1 = 'cf1'
+    cf2 = 'cf2'
+
+    assert total_growth({}) == (0, 0, calc_utils.GrowthInfo())
+
+    assert total_growth(
+        {cf1: {0: calc_utils.GrowthInfo()}}) == \
+        (0, 1, calc_utils.GrowthInfo())
+
+    assert total_growth(
+        {cf1: {0: calc_utils.GrowthInfo(1, 2, 3, 4)}}) == \
+        (1, 1, calc_utils.GrowthInfo(1, 2, 3, 4))
+
+    assert total_growth(
+        {cf1: {0: calc_utils.GrowthInfo(None, 2, 0, 4)}}) == \
+        (1, 1, calc_utils.GrowthInfo(0, 0, 0, 0))
+
+    assert total_growth(
+        {cf1: {0: calc_utils.GrowthInfo(None, None, 3, 4)}}) == \
+        (1, 1, calc_utils.GrowthInfo(0, 0, 3, 4))
+
+    assert total_growth(
+        {cf1: {0: calc_utils.GrowthInfo(1, 2, None, None)}}) == \
+        (0, 1, calc_utils.GrowthInfo())
+
+    assert total_growth(
+        {cf1:
+         {0: calc_utils.GrowthInfo(1, 2, 3, 4),
+          1: calc_utils.GrowthInfo(5, 6, 7, 8)}}) == \
+        (1, 1, calc_utils.GrowthInfo(6, 8, 10, 12))
+
+    assert total_growth(
+        {cf1:
+         {0: calc_utils.GrowthInfo(None, 2, 0, 0),
+          1: calc_utils.GrowthInfo(5, 6, 7, 8)}}) == \
+        (1, 1, calc_utils.GrowthInfo(5, 6, 7, 8))
+
+    assert total_growth(
+        {cf1:
+         {0: calc_utils.GrowthInfo(None, 2, 3, 4),
+          1: calc_utils.GrowthInfo(5, 6, 7, 8)}}) == \
+        (1, 1, calc_utils.GrowthInfo(5, 6, 10, 12))
+
+    assert total_growth(
+        {cf1: {0: calc_utils.GrowthInfo(1, 2, 3, 4)},
+         cf2: {1: calc_utils.GrowthInfo(5, 6, 7, 8)}}) == \
+        (2, 2, calc_utils.GrowthInfo(6, 8, 10, 12))
+
+    assert total_growth(
+        {cf1:
+         {0: calc_utils.GrowthInfo(None, 2, 3, 4),
+          1: calc_utils.GrowthInfo(5, 6, 7, 8)},
+         cf2: {1: calc_utils.GrowthInfo(None, None, 0, 0)}}) == \
+        (2, 2, calc_utils.GrowthInfo(5, 6, 10, 12))

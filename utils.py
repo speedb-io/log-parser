@@ -261,9 +261,19 @@ def convert_seconds_to_dd_hh_mm_ss(seconds):
     return time.strftime(f'{days}d %Hh %Mm %Ss', time.gmtime(seconds))
 
 
+def accumulate(curr_sum, value):
+    if value is None:
+        return curr_sum
+
+    if curr_sum is None:
+        return int(value)
+    else:
+        return curr_sum + int(value)
+
 # =====================================
 #       LOGGING TYPES & UTILS
 # =====================================
+
 
 @dataclass
 class ParsingContext:
