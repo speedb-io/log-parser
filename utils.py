@@ -270,6 +270,7 @@ def accumulate(curr_sum, value):
     else:
         return curr_sum + int(value)
 
+
 # =====================================
 #       LOGGING TYPES & UTILS
 # =====================================
@@ -411,17 +412,36 @@ class ParsingAssertion(ParsingError):
         super().__init__(msg, error_context)
 
 
-class LogFileNotFoundError(Exception):
+class UnrecoverableError(Exception):
+    pass
+
+
+class LogFileNotFoundError(UnrecoverableError):
     def __init__(self, file_path):
         self.msg = f"Log file to parse ({file_path}) Not Found"
 
 
-class EmptyLogFile(Exception):
+class LogFileIsNotAFileError(UnrecoverableError):
+    def __init__(self, file_path):
+        self.msg = f"Log file to Parse ({file_path}) is NOT a File"
+
+
+class EmptyLogFile(UnrecoverableError):
     def __init__(self, file_path):
         self.msg = f"{file_path} Is Empty"
 
 
-class InvalidLogFile(Exception):
+class BaselineFileNotFoundError(UnrecoverableError):
+    def __init__(self, file_path):
+        self.msg = f"Baseline file ({file_path}) Not Found"
+
+
+class BaselineIsNotAFile(UnrecoverableError):
+    def __init__(self, file_path):
+        self.msg = f"Baseline file ({file_path}) is NOT a File"
+
+
+class InvalidLogFile(UnrecoverableError):
     def __init__(self, file_path):
         self.msg = f"{file_path} is not a valid log File"
 

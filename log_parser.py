@@ -60,9 +60,17 @@ def display_process_bar():
             time_from_last_print = 0
 
 
-def parse_log(log_file_path):
+def parse_log(log_file_path, baseline_file_name):
     if not os.path.isfile(log_file_path):
         raise utils.LogFileNotFoundError(log_file_path)
+
+    if baseline_file_name is not None:
+        p = pathlib.Path(cmdline_args.baseline)
+
+        if not p.exists():
+            raise utils.BaselineFileNotFoundError(cmdline_args.baseline)
+        if not p.is_file():
+            raise utils.BaselineIsNotAFile(cmdline_args.baseline)
 
     logging.debug(f"Parsing {log_file_path}")
     with open(log_file_path) as log_file:
@@ -112,6 +120,11 @@ def setup_cmd_line_parser():
                         default=False,
                         help="Generate a log file for the parser's log "
                              "messages (default: %(default)s)")
+    parser.add_argument("-b", "--baseline",
+                        help="Explicitly Specify a baseline LOG file to be "
+                             "used instead of automatically finding "
+                             "one. (default: %(default)s)")
+
     return parser
 
 
@@ -281,17 +294,17 @@ def main():
     output_folder = prepare_output_folder(output_folder)
     my_log_file_path = setup_logger(cmdline_args.generate_log,
                                     output_folder)
-    validate_and_sanitize_cmd_line_args(cmdline_args)
-
     t = threading.Thread(target=display_process_bar)
     t.start()
 
     try:
-        log_file_path = cmdline_args.log_file_path
-        log_file_path = os.path.abspath(log_file_path)
-        parsed_log = parse_log(log_file_path)
+        validate_and_sanitize_cmd_line_args(cmdline_args)
 
+        parsed_log = parse_log(cmdline_args.log_file_name,
+                               cmdline_args.baseline)
         exit_event.set()
+
+        log_file_path = parsed_log.get_log_file_path()
 
         if cmdline_args.console == utils.ConsoleOutputType.LONG:
             report_to_console = False
@@ -318,11 +331,7 @@ def main():
                                        json_content)
     except utils.ParsingError as exception:
         report_exception(exception, console=True)
-    except utils.LogFileNotFoundError as exception:
-        report_exception(exception, console=True)
-    except utils.EmptyLogFile as exception:
-        report_exception(exception, console=True)
-    except utils.InvalidLogFile as exception:
+    except utils.UnrecoverableError as exception:
         report_exception(exception, console=True)
     except ValueError as exception:
         fatal_exception(exception)
