@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import db_files
 import events
 import utils
-from test.testing_utils import create_event
+import test.testing_utils as test_utils
 
 job_id1 = 1
 job_id2 = 2
@@ -23,76 +23,21 @@ file_number2 = 5678
 file_number3 = 9999
 
 
-@dataclass
-class GlobalTestVars:
-    event_time_micros: int = 0
-
-    cmprsd_data_size_bytes: int = 62396458
-    num_data_blocks: int = 1000
-    total_keys_sizes_bytes: int = 2000
-    total_values_sizes_bytes: int = 3333
-    index_size: int = 3000
-    filter_size: int = 4000
-    num_entries: int = 5555
-    filter_policy: str = "bloomfilter"
-    num_filter_entries: int = 6666
-    compression_type: str = "NoCompression"
-
-
-def get_table_properties(global_vars):
-    assert isinstance(global_vars, GlobalTestVars)
-
-    return {
-        "data_size": global_vars.cmprsd_data_size_bytes,
-        "index_size": global_vars.index_size,
-        "index_partitions": 0,
-        "top_level_index_size": 0,
-        "index_key_is_user_key": 1,
-        "index_value_is_delta_encoded": 1,
-        "filter_size": global_vars.filter_size,
-        "raw_key_size": global_vars.total_keys_sizes_bytes,
-        "raw_average_key_size": 24,
-        "raw_value_size": global_vars.total_values_sizes_bytes,
-        "raw_average_value_size": 1000,
-        "num_data_blocks": global_vars.num_data_blocks,
-        "num_entries": global_vars.num_entries,
-        "num_filter_entries": global_vars.num_filter_entries,
-        "num_deletions": 0,
-        "num_merge_operands": 0,
-        "num_range_deletions": 0,
-        "format_version": 0,
-        "fixed_key_len": 0,
-        "filter_policy": global_vars.filter_policy,
-        "column_family_name": "default",
-        "column_family_id": 0,
-        "comparator": "leveldb.BytewiseComparator",
-        "merge_operator": "nullptr",
-        "prefix_extractor_name": "nullptr",
-        "property_collectors": "[]",
-        "compression": global_vars.compression_type,
-        "oldest_key_time": 1672823099,
-        "file_creation_time": 1672823099,
-        "slow_compression_estimated_data_size": 0,
-        "fast_compression_estimated_data_size": 0,
-        "db_id": "c100448c-dc04-4c74-8ab2-65d72f3aa3a8",
-        "db_session_id": "4GAWIG5RIF8PQWM3NOQG",
-        "orig_file_number": 37155}
-
-
 def test_create_delete_file():
-    vars = GlobalTestVars()
+    table_vars = test_utils.TablePropertiesTestVars()
 
-    creation_event1 = create_event(job_id1, cf_names, time1,
-                                   events.EventType.TABLE_FILE_CREATION, cf1,
-                                   file_number=file_number1,
-                                   table_properties=get_table_properties(vars))
+    creation_event1 = \
+        test_utils.create_event(
+            job_id1, cf_names, time1, events.EventType.TABLE_FILE_CREATION,
+            cf1, file_number=file_number1,
+            table_properties=test_utils.get_table_properties(table_vars))
 
     monitor = db_files.DbFilesMonitor()
     assert monitor.get_all_live_files() == {}
     assert monitor.get_cf_live_files(cf1) == []
 
     expected_data_size_bytes = \
-        vars.total_keys_sizes_bytes + vars.total_values_sizes_bytes
+        table_vars.total_keys_sizes_bytes + table_vars.total_values_sizes_bytes
 
     info = \
         db_files.DbFileInfo(
@@ -100,15 +45,14 @@ def test_create_delete_file():
             cf_name=cf1,
             creation_time=time1,
             deletion_time=None,
-            size_bytes=0,
-            compressed_size_bytes=0,
-            compressed_data_size_bytes=vars.cmprsd_data_size_bytes,
+            compressed_file_size_bytes=0,
+            compressed_data_size_bytes=0,
             data_size_bytes=expected_data_size_bytes,
-            index_size_bytes=vars.index_size,
-            filter_size_bytes=vars.filter_size,
-            filter_policy=vars.filter_policy,
-            num_filter_entries=vars.num_filter_entries,
-            compression_type=vars.compression_type,
+            index_size_bytes=table_vars.index_size_bytes,
+            filter_size_bytes=table_vars.filter_size_bytes,
+            filter_policy=table_vars.filter_policy,
+            num_filter_entries=table_vars.num_filter_entries,
+            compression_type=table_vars.compression_type,
             level=None,
             creation_event=None,
             deletion_event=None)
@@ -123,9 +67,10 @@ def test_create_delete_file():
     assert monitor.get_cf_live_files(cf1) == [info1]
     assert monitor.get_cf_live_files(cf2) == []
 
-    deletion_event = create_event(job_id1, cf_names, time1_plus_10_sec,
-                                  events.EventType.TABLE_FILE_DELETION, cf1,
-                                  file_number=file_number1)
+    deletion_event = \
+        test_utils.create_event(job_id1, cf_names, time1_plus_10_sec,
+                                events.EventType.TABLE_FILE_DELETION, cf1,
+                                file_number=file_number1)
     assert monitor.new_event(deletion_event)
     info1.deletion_time = time1_plus_10_sec
     info1.deletion_event = deletion_event
@@ -136,10 +81,12 @@ def test_create_delete_file():
     assert monitor.get_cf_live_files(cf1) == []
     assert monitor.get_cf_live_files(cf2) == []
 
-    creation_event2 = create_event(job_id1, cf_names, time1_plus_10_sec,
-                                   events.EventType.TABLE_FILE_CREATION, cf1,
-                                   file_number=file_number2,
-                                   table_properties=get_table_properties(vars))
+    creation_event2 = \
+        test_utils.create_event(
+            job_id1, cf_names, time1_plus_10_sec,
+            events.EventType.TABLE_FILE_CREATION, cf1,
+            file_number=file_number2,
+            table_properties=test_utils.get_table_properties(table_vars))
     info2 = copy.deepcopy(info)
     info2.file_number = file_number2
     info2.creation_time = time1_plus_10_sec
@@ -153,10 +100,12 @@ def test_create_delete_file():
     assert monitor.get_cf_live_files(cf2) == []
     assert monitor.get_cf_live_files(cf1) == [info2]
 
-    creation_event3 = create_event(job_id1, cf_names, time1_plus_10_sec,
-                                   events.EventType.TABLE_FILE_CREATION, cf2,
-                                   file_number=file_number3,
-                                   table_properties=get_table_properties(vars))
+    creation_event3 = \
+        test_utils.create_event(
+            job_id1, cf_names, time1_plus_10_sec,
+            events.EventType.TABLE_FILE_CREATION, cf2,
+            file_number=file_number3,
+            table_properties=test_utils.get_table_properties(table_vars))
     info3 = copy.deepcopy(info)
     info3.file_number = file_number3
     info3.cf_name = cf2
@@ -172,144 +121,194 @@ def test_create_delete_file():
     assert monitor.get_cf_live_files(cf2) == [info3]
 
 
-create_job_id = 100
-delete_job_id = 200
-elapsed_seconds = 0
-created_file_number = 1
+@dataclass
+class LiveFilesCommonTestVars:
+    create_job_id = 100
+    delete_job_id = 200
+    elapsed_seconds = 0
+    created_file_number = 1
+
+
+@dataclass
+class CreateTestVars(LiveFilesCommonTestVars):
+    job_id: int = None
+    file_number: int = None
+    time: str = None
+    cf: str = None
+    total_keys_sizes_bytes: int = None
+    total_values_sizes_bytes: int = None
+    index_size: int = None
+    filter_size: int = None
+
+    def __init__(self, cf, total_keys_sizes_bytes, total_values_sizes_bytes,
+                 index_size, filter_size):
+        LiveFilesCommonTestVars.create_job_id += 1
+        self.job_id = LiveFilesCommonTestVars.create_job_id
+
+        LiveFilesCommonTestVars.created_file_number += 1
+        self.file_number = LiveFilesCommonTestVars.created_file_number
+
+        self.cf = cf
+        self.total_keys_sizes_bytes = total_keys_sizes_bytes
+        self.total_values_sizes_bytes = total_values_sizes_bytes
+        self.index_size = index_size
+        self.filter_size = filter_size
+
+        LiveFilesCommonTestVars.elapsed_seconds += 1
+        self.time = \
+            utils.get_time_relative_to(
+                time1, LiveFilesCommonTestVars.elapsed_seconds)
+
+
+@dataclass
+class DeleteTestVars:
+    job_id: int = None
+    file_number: int = None
+    time: str = None
+    cf: str = None
+
+    def __init__(self, create_vars):
+        assert isinstance(create_vars, CreateTestVars)
+
+        LiveFilesCommonTestVars.delete_job_id += 1
+        self.job_id = LiveFilesCommonTestVars.delete_job_id
+
+        self.file_number = create_vars.file_number
+        self.cf = create_vars.cf
+
+        LiveFilesCommonTestVars.elapsed_seconds += 1
+        self.time = \
+            utils.get_time_relative_to(
+                time1, LiveFilesCommonTestVars.elapsed_seconds)
+
+
+def create_test_file(monitor, table_vars, global_vars):
+    assert isinstance(table_vars, CreateTestVars)
+    assert isinstance(global_vars, test_utils.TablePropertiesTestVars)
+
+    global_vars.total_keys_sizes_bytes = table_vars.total_keys_sizes_bytes
+    global_vars.total_values_sizes_bytes = table_vars.total_values_sizes_bytes
+    global_vars.index_size_bytes = table_vars.index_size
+    global_vars.filter_size_bytes = table_vars.filter_size
+
+    creation_event = \
+        test_utils.create_event(
+            table_vars.job_id, cf_names, table_vars.time,
+            events.EventType.TABLE_FILE_CREATION, table_vars.cf,
+            file_number=table_vars.file_number,
+            table_properties=test_utils.get_table_properties(global_vars))
+    assert monitor.new_event(creation_event)
+    return creation_event
+
+
+def delete_test_file(monitor, table_vars):
+    assert isinstance(table_vars, DeleteTestVars)
+
+    deletion_event = \
+        test_utils.create_event(table_vars.job_id, cf_names, table_vars.time,
+                                events.EventType.TABLE_FILE_DELETION,
+                                table_vars.cf,
+                                file_number=table_vars.file_number)
+    assert monitor.new_event(deletion_event)
 
 
 def test_live_file_stats():
-    @dataclass
-    class CreateTestVars:
-        job_id: int = None
-        file_number: int = None
-        time: str = None
-        cf: str = None
-        index_size: int = None
-        filter_size: int = None
-
-        def __init__(self, cf, index_size, filter_size):
-            global create_job_id, elapsed_seconds, created_file_number
-
-            create_job_id += 1
-            self.job_id = create_job_id
-
-            created_file_number += 1
-            self.file_number = created_file_number
-
-            self.cf = cf
-            self.index_size = index_size
-            self.filter_size = filter_size
-
-            global elapsed_seconds
-            elapsed_seconds += 1
-            self.time = utils.get_time_relative_to(time1, elapsed_seconds)
-
-    @dataclass
-    class DeleteTestVars:
-        job_id: int = None
-        file_number: int = None
-        time: str = None
-        cf: str = None
-
-        def __init__(self, create_vars):
-            assert isinstance(create_vars, CreateTestVars)
-
-            global delete_job_id, elapsed_seconds
-
-            delete_job_id += 1
-            self.job_id = delete_job_id
-
-            self.file_number = create_vars.file_number
-            self.cf = create_vars.cf
-
-            elapsed_seconds += 1
-            self.time = utils.get_time_relative_to(time1, elapsed_seconds)
-
-    def create_test_file(monitor, vars, global_vars):
-        assert isinstance(vars, CreateTestVars)
-
-        global_vars.index_size = vars.index_size
-        global_vars.filter_size = vars.filter_size
-
-        creation_event = \
-            create_event(vars.job_id, cf_names, vars.time,
-                         events.EventType.TABLE_FILE_CREATION, vars.cf,
-                         file_number=vars.file_number,
-                         table_properties=get_table_properties(global_vars))
-        assert monitor.new_event(creation_event)
-        return creation_event
-
-    def delete_test_file(monitor, vars):
-        assert isinstance(vars, DeleteTestVars)
-
-        deletion_event = create_event(vars.job_id, cf_names, vars.time,
-                                      events.EventType.TABLE_FILE_DELETION,
-                                      vars.cf,
-                                      file_number=vars.file_number)
-        assert monitor.new_event(deletion_event)
-
-    global_vars = GlobalTestVars()
+    table_vars = test_utils.TablePropertiesTestVars()
 
     cf1_create_1_vars = \
-        CreateTestVars(cf=cf1, index_size=100, filter_size=200)
+        CreateTestVars(cf=cf1,
+                       total_keys_sizes_bytes=5,
+                       total_values_sizes_bytes=15,
+                       index_size=100,
+                       filter_size=200)
     cf1_create_2_vars = \
-        CreateTestVars(cf=cf1, index_size=50, filter_size=500)
+        CreateTestVars(cf=cf1,
+                       total_keys_sizes_bytes=10,
+                       total_values_sizes_bytes=20,
+                       index_size=50,
+                       filter_size=500)
     cf1_create_3_vars = \
-        CreateTestVars(cf=cf1, index_size=170, filter_size=30)
+        CreateTestVars(cf=cf1,
+                       total_keys_sizes_bytes=30,
+                       total_values_sizes_bytes=10,
+                       index_size=170,
+                       filter_size=30)
 
     cf1_delete_1_vars = DeleteTestVars(cf1_create_1_vars)
     cf1_delete_2_vars = DeleteTestVars(cf1_create_2_vars)
 
     cf2_create_1_vars = \
-        CreateTestVars(cf=cf2, index_size=100, filter_size=200)
+        CreateTestVars(cf=cf2,
+                       total_keys_sizes_bytes=200,
+                       total_values_sizes_bytes=200,
+                       index_size=100,
+                       filter_size=200)
     cf2_create_2_vars = \
-        CreateTestVars(cf=cf2, index_size=400, filter_size=200)
+        CreateTestVars(cf=cf2,
+                       total_keys_sizes_bytes=600,
+                       total_values_sizes_bytes=400,
+                       index_size=400,
+                       filter_size=200)
 
     cf2_delete_1_vars = \
         DeleteTestVars(cf2_create_1_vars)
 
     monitor = db_files.DbFilesMonitor()
 
-    create_test_file(monitor, cf1_create_1_vars, global_vars)
-    # Live - cf1: index=100, filter=200
+    create_test_file(monitor, cf1_create_1_vars, table_vars)
+    # Live - cf1: data=20, index=100, filter=200
 
     delete_test_file(monitor, cf1_delete_1_vars)
-    # Live: - cf1: index=0, filter=0
+    # Live: - cf1: data=0, index=0, filter=0
 
     cf1_create_2_event =\
-        create_test_file(monitor, cf1_create_2_vars, global_vars)
+        create_test_file(monitor, cf1_create_2_vars, table_vars)
     cf1_create_2_time = cf1_create_2_event.get_log_time()
-    # Live: - cf1: index=50, filter=500
+    # Live: - cf1: data=30, index=50, filter=500
 
     cf2_create_1_event =\
-        create_test_file(monitor, cf2_create_1_vars, global_vars)
+        create_test_file(monitor, cf2_create_1_vars, table_vars)
     cf2_create_1_time = cf2_create_1_event.get_log_time()
-    # Live: - cf1: index=50, filter=500, cf2: index=100, filter=200
+    # Live: - cf1: data=30, index=50, filter=500,
+    #         cf2: data=1000, index=100, filter=200
 
     cf1_create_3_event = \
-        create_test_file(monitor, cf1_create_3_vars, global_vars)
+        create_test_file(monitor, cf1_create_3_vars, table_vars)
     cf1_create_3_time = cf1_create_3_event.get_log_time()
-    # Live: - cf1: index=220, filter=530, cf2: index=100, filter=200
+    # Live: - cf1: data=70, index=220, filter=530,
+    #         cf2: data=1000, index=100, filter=200
 
     delete_test_file(monitor, cf2_delete_1_vars)
-    # Live: - cf1: index=220, filter=530, cf2: index=0, filter=0
+    # Live: - cf1: data=70, index=220, filter=530,
+    #         cf2: data=0, index=0, filter=0
 
     delete_test_file(monitor, cf1_delete_2_vars)
-    # Live: - cf1: index=170, filter=30, cf2: index=0, filter=0
+    # Live: - cf1: data=40, index=170, filter=30,
+    #         cf2: data=0, index=0, filter=0
 
     cf2_create_2_event =\
-        create_test_file(monitor, cf2_create_2_vars, global_vars)
+        create_test_file(monitor, cf2_create_2_vars, table_vars)
     cf2_create_2_time = cf2_create_2_event.get_log_time()
-    # Live: - cf1: index=170, filter=30, cf2: index=400, filter=200
+    # Live: - cf1: data=40, index=170, filter=30,
+    #         cf2: data=600, index=400, filter=200
+
+    expected_cf1_data_stats = db_files.BlockLiveFileStats()
+    expected_cf1_data_stats.num_created = 3
+    expected_cf1_data_stats.num_live = 1
+    expected_cf1_data_stats.total_created_size_bytes = 90
+    expected_cf1_data_stats.curr_total_live_size_bytes = 40
+    expected_cf1_data_stats.largest_block_size_bytes = 40
+    expected_cf1_data_stats.largest_block_size_time = cf1_create_3_time
+    expected_cf1_data_stats.max_total_live_size_bytes = 70
+    expected_cf1_data_stats.max_total_live_size_time = cf1_create_3_time
 
     expected_cf1_index_stats = db_files.BlockLiveFileStats()
     expected_cf1_index_stats.num_created = 3
     expected_cf1_index_stats.num_live = 1
     expected_cf1_index_stats.total_created_size_bytes = 320
     expected_cf1_index_stats.curr_total_live_size_bytes = 170
-    expected_cf1_index_stats.max_size_bytes = 170
-    expected_cf1_index_stats.max_size_time = cf1_create_3_time
+    expected_cf1_index_stats.largest_block_size_bytes = 170
+    expected_cf1_index_stats.largest_block_size_time = cf1_create_3_time
     expected_cf1_index_stats.max_total_live_size_bytes = 220
     expected_cf1_index_stats.max_total_live_size_time = cf1_create_3_time
 
@@ -318,18 +317,28 @@ def test_live_file_stats():
     expected_cf1_filter_stats.num_live = 1
     expected_cf1_filter_stats.total_created_size_bytes = 730
     expected_cf1_filter_stats.curr_total_live_size_bytes = 30
-    expected_cf1_filter_stats.max_size_bytes = 500
-    expected_cf1_filter_stats.max_size_time = cf1_create_2_time
+    expected_cf1_filter_stats.largest_block_size_bytes = 500
+    expected_cf1_filter_stats.largest_block_size_time = cf1_create_2_time
     expected_cf1_filter_stats.max_total_live_size_bytes = 530
     expected_cf1_filter_stats.max_total_live_size_time = cf1_create_3_time
+
+    expected_cf2_data_stats = db_files.BlockLiveFileStats()
+    expected_cf2_data_stats.num_created = 2
+    expected_cf2_data_stats.num_live = 1
+    expected_cf2_data_stats.total_created_size_bytes = 1400
+    expected_cf2_data_stats.curr_total_live_size_bytes = 1000
+    expected_cf2_data_stats.largest_block_size_bytes = 1000
+    expected_cf2_data_stats.largest_block_size_time = cf2_create_2_time
+    expected_cf2_data_stats.max_total_live_size_bytes = 1000
+    expected_cf2_data_stats.max_total_live_size_time = cf2_create_2_time
 
     expected_cf2_index_stats = db_files.BlockLiveFileStats()
     expected_cf2_index_stats.num_created = 2
     expected_cf2_index_stats.num_live = 1
     expected_cf2_index_stats.total_created_size_bytes = 500
     expected_cf2_index_stats.curr_total_live_size_bytes = 400
-    expected_cf2_index_stats.max_size_bytes = 400
-    expected_cf2_index_stats.max_size_time = cf2_create_2_time
+    expected_cf2_index_stats.largest_block_size_bytes = 400
+    expected_cf2_index_stats.largest_block_size_time = cf2_create_2_time
     expected_cf2_index_stats.max_total_live_size_bytes = 400
     expected_cf2_index_stats.max_total_live_size_time = cf2_create_2_time
 
@@ -338,29 +347,49 @@ def test_live_file_stats():
     expected_cf2_filter_stats.num_live = 1
     expected_cf2_filter_stats.total_created_size_bytes = 400
     expected_cf2_filter_stats.curr_total_live_size_bytes = 200
-    expected_cf2_filter_stats.max_size_bytes = 200
-    expected_cf2_filter_stats.max_size_time = cf2_create_1_time
+    expected_cf2_filter_stats.largest_block_size_bytes = 200
+    expected_cf2_filter_stats.largest_block_size_time = cf2_create_1_time
     expected_cf2_filter_stats.max_total_live_size_bytes = 200
     expected_cf2_filter_stats.max_total_live_size_time = cf2_create_1_time
 
     actual_stats = monitor.get_blocks_stats()
+    assert actual_stats[cf1][db_files.BlockType.DATA] == \
+           expected_cf1_data_stats
     assert actual_stats[cf1][db_files.BlockType.INDEX] == \
            expected_cf1_index_stats
     assert actual_stats[cf1][db_files.BlockType.FILTER] == \
            expected_cf1_filter_stats
 
+    assert actual_stats[cf2][db_files.BlockType.DATA] == \
+           expected_cf2_data_stats
     assert actual_stats[cf2][db_files.BlockType.INDEX] == \
            expected_cf2_index_stats
     assert actual_stats[cf2][db_files.BlockType.FILTER] == \
            expected_cf2_filter_stats
+
+    expected_data_stats = db_files.BlockLiveFileStats()
+    expected_data_stats.num_created = 5
+    expected_data_stats.num_live = 2
+    expected_data_stats.total_created_size_bytes = 1490
+    expected_data_stats.curr_total_live_size_bytes = 1040
+    expected_data_stats.largest_block_size_bytes = 1000
+    expected_data_stats.largest_block_size_time = cf2_create_2_time
+    # These are incorrect for more than 1 cf
+    expected_data_stats.max_total_live_size_bytes = 0
+    expected_data_stats.max_total_live_size_time = None
+
+    actual_index_stats = \
+        db_files.get_block_stats_for_cfs_group(
+            [cf1, cf2], monitor, db_files.BlockType.DATA)
+    assert actual_index_stats == expected_data_stats
 
     expected_index_stats = db_files.BlockLiveFileStats()
     expected_index_stats.num_created = 5
     expected_index_stats.num_live = 2
     expected_index_stats.total_created_size_bytes = 820
     expected_index_stats.curr_total_live_size_bytes = 570
-    expected_index_stats.max_size_bytes = 400
-    expected_index_stats.max_size_time = cf2_create_2_time
+    expected_index_stats.largest_block_size_bytes = 400
+    expected_index_stats.largest_block_size_time = cf2_create_2_time
     # These are incorrect for more than 1 cf
     expected_index_stats.max_total_live_size_bytes = 0
     expected_index_stats.max_total_live_size_time = None
@@ -375,8 +404,8 @@ def test_live_file_stats():
     expected_filter_stats.num_live = 2
     expected_filter_stats.total_created_size_bytes = 1130
     expected_filter_stats.curr_total_live_size_bytes = 230
-    expected_filter_stats.max_size_bytes = 500
-    expected_filter_stats.max_size_time = cf1_create_2_time
+    expected_filter_stats.largest_block_size_bytes = 500
+    expected_filter_stats.largest_block_size_time = cf1_create_2_time
     # These are incorrect for more than 1 cf
     # expected_filter_stats.max_total_live_size_bytes = 530
     # expected_filter_stats.max_total_live_size_time = cf1_create_3_time
