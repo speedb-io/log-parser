@@ -84,9 +84,11 @@ def get_flushes_json(parsed_log):
         display_utils.prepare_cf_flushes_stats_for_display(parsed_log)
 
     if flushes_stats:
-        for cf_name in parsed_log.get_cfs_names(include_auto_generated=False):
+        flushes_json["CF-s"] = {}
+        cfs_names = parsed_log.get_cfs_names(include_auto_generated=False)
+        for cf_name in cfs_names:
             if cf_name in flushes_stats:
-                flushes_json[cf_name] = flushes_stats[cf_name]
+                flushes_json["CF-s"][cf_name] = flushes_stats[cf_name]
     else:
         flushes_json = utils.NO_FLUSHES_TEXT
 
@@ -105,7 +107,8 @@ def get_compactions_json(parsed_log):
             display_utils.prepare_global_compactions_stats_for_display(
                 parsed_log))
         compactions_json["CF-s"] = {}
-        for cf_name in parsed_log.get_cfs_names(include_auto_generated=False):
+        cfs_names = parsed_log.get_cfs_names(include_auto_generated=False)
+        for cf_name in cfs_names:
             if cf_name in compactions_stats:
                 compactions_json["CF-s"][cf_name] = compactions_stats[cf_name]
     else:
