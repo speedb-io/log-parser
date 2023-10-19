@@ -690,8 +690,6 @@ def prepare_cf_compactions_stats_for_display(parsed_log):
                                                "seconds"),
                 "Per-Level Write-Amp": per_level_write_amp
             }
-        else:
-            disp[cf_name] = "No Compaction Stats"
 
     return disp
 
