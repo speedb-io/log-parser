@@ -94,7 +94,7 @@ def test_create_delete_file():
     expected_data_size_bytes = \
         vars.total_keys_sizes_bytes + vars.total_values_sizes_bytes
 
-    info1 = \
+    info = \
         db_files.DbFileInfo(
             file_number=file_number1,
             cf_name=cf1,
@@ -109,9 +109,13 @@ def test_create_delete_file():
             filter_policy=vars.filter_policy,
             num_filter_entries=vars.num_filter_entries,
             compression_type=vars.compression_type,
-            level=None)
+            level=None,
+            creation_event=None,
+            deletion_event=None)
 
     assert monitor.new_event(creation_event1)
+    info1 = copy.deepcopy(info)
+    info1.creation_event = creation_event1
     assert monitor.get_all_files() == {cf1: [info1]}
     assert monitor.get_all_cf_files(cf1) == [info1]
     assert monitor.get_all_cf_files(cf2) == []
@@ -124,6 +128,7 @@ def test_create_delete_file():
                                   file_number=file_number1)
     assert monitor.new_event(deletion_event)
     info1.deletion_time = time1_plus_10_sec
+    info1.deletion_event = deletion_event
     assert monitor.get_all_files() == {cf1: [info1]}
     assert monitor.get_all_cf_files(cf1) == [info1]
     assert monitor.get_all_cf_files(cf2) == []
@@ -135,10 +140,10 @@ def test_create_delete_file():
                                    events.EventType.TABLE_FILE_CREATION, cf1,
                                    file_number=file_number2,
                                    table_properties=get_table_properties(vars))
-    info2 = copy.deepcopy(info1)
+    info2 = copy.deepcopy(info)
     info2.file_number = file_number2
     info2.creation_time = time1_plus_10_sec
-    info2.deletion_time = None
+    info2.creation_event = creation_event2
 
     assert monitor.new_event(creation_event2)
     assert monitor.get_all_files() == {cf1: [info1, info2]}
@@ -152,11 +157,12 @@ def test_create_delete_file():
                                    events.EventType.TABLE_FILE_CREATION, cf2,
                                    file_number=file_number3,
                                    table_properties=get_table_properties(vars))
-    info3 = copy.deepcopy(info1)
+    info3 = copy.deepcopy(info)
     info3.file_number = file_number3
     info3.cf_name = cf2
     info3.creation_time = time1_plus_10_sec
-    info3.deletion_time = None
+    info3.creation_event = creation_event3
+
     assert monitor.new_event(creation_event3)
     assert monitor.get_all_files() == {cf1: [info1, info2], cf2: [info3]}
     assert monitor.get_all_cf_files(cf1) == [info1, info2]
