@@ -13,6 +13,7 @@ class DbFileInfo:
     cf_name: str
     creation_time: str
     deletion_time: str = None
+    # TODO - Remove
     size_bytes: int = 0
     compressed_size_bytes: int = 0
     compressed_data_size_bytes: int = 0
@@ -24,8 +25,17 @@ class DbFileInfo:
     compression_type: str = None
     level: int = None
 
+    creation_event: events.Event = None
+    deletion_event: events.Event = None
+
     def is_alive(self):
         return self.deletion_time is None
+
+    def was_created_in_log(self):
+        return self.creation_time is not None
+
+    def was_deleted_without_creation(self):
+        return not self.was_created_in_log()
 
     def file_deleted(self, deletion_time):
         assert self.is_alive()
@@ -172,6 +182,7 @@ class DbFilesMonitor:
         file_info = DbFileInfo(file_number,
                                cf_name=cf_name,
                                creation_time=event.get_log_time())
+        file_info.creation_event = event
         file_info.compressed_size_bytes = \
             event.get_compressed_file_size_bytes()
         file_info.compressed_data_size_bytes = \
@@ -213,6 +224,7 @@ class DbFilesMonitor:
                 f"deleted, Ignoring Event.\n{event}")
             return False
 
+        file_info.deletion_event = event
         file_info.file_deleted(event.get_log_time())
         assert file_info.cf_name in self.live_files_stats
         self.live_files_stats[file_info.cf_name].file_deleted(file_info)
@@ -228,6 +240,9 @@ class DbFilesMonitor:
                     files[info.cf_name] = list()
                 files[info.cf_name].append(info)
         return files
+
+    def get_all_files_flat(self):
+        return self.files
 
     def get_all_cf_files(self, cf_name):
         all_cf_files = \

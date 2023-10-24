@@ -68,6 +68,8 @@ class EventField(str, Enum):
     INPUT_DATA_SIZE = "input_data_size"
     COMPACTION_TIME_MICROS = "compaction_time_micros"
     TOTAL_OUTPUT_SIZE = "total_output_size"
+    # Table Creation
+    OLDEST_BLOB_FILE_NUM = "oldest_blob_file_number"
     # Compaction Finished
     OUTPUT_LEVEL = "output_level"
     NUM_OUTPUT_FILES = "num_output_files"
@@ -269,9 +271,10 @@ class Event:
         return self.get_log_time() < other.get_log_time()
 
     def __eq__(self, other):
+        print("Here")
         return self.get_log_time() == other.get_log_time() and \
-               self.get_type() == other.get_type() and \
-               self.get_cf_name() == other.get_cf_name()
+            self.get_type() == other.get_type() and \
+            self.get_cf_name() == other.get_cf_name()
 
     def does_have_details(self):
         return self.event_details_dict is not None
@@ -718,6 +721,12 @@ class TableFileCreationEvent(Event):
         if compression_type == "":
             return None
         return compression_type
+
+    def is_compressed(self):
+        return self.get_compression_type() == utils.NO_COMPRESSION
+
+    def get_table_properties(self):
+        return self.get_event_data_field1(EventField.TABLE_PROPERTIES)
 
     def get_table_properties_field(self, table_field, default=None,
                                    field_expected=True):

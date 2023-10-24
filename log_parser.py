@@ -233,6 +233,7 @@ def generate_csvs_if_applicable(parsed_log, output_folder, report_to_console):
     events_mngr = parsed_log.get_events_mngr()
     stats_mngr = parsed_log.get_stats_mngr()
     compactions_monitor = parsed_log.get_compactions_monitor()
+    files_monitor = parsed_log.get_files_monitor()
 
     counters_mngr = \
         parsed_log.get_counters_mngr()
@@ -251,6 +252,9 @@ def generate_csvs_if_applicable(parsed_log, output_folder, report_to_console):
 
     flushes_csv_path = csv_outputter.generate_flushes_csv(
         cfs_names, events_mngr, output_folder, report_to_console)
+
+    csv_outputter.generate_files_csv(files_monitor, output_folder,
+                                     report_to_console)
 
     def generate_disp_path(path):
         if path is None:

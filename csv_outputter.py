@@ -16,9 +16,10 @@ import csv
 import io
 import logging
 from dataclasses import dataclass
-
+import events
 import utils
 from events import FlowType, EventField
+import db_files
 
 
 def get_counters_csv(counter_and_histograms_mngr):
@@ -427,6 +428,71 @@ def get_flushes_csv(cfs_names, events_mngr):
     return get_flow_events_csv(cfs_names, events_mngr, FlowType.FLUSH)
 
 
+def get_files_csv(files_monitor):
+    f = io.StringIO()
+    writer = csv.writer(f)
+
+    files = files_monitor.get_all_files_flat()
+    if not files:
+        return None
+
+    header_line = None
+    for file_number, file_info in files.items():
+        # Skipping files that were only deleted
+        if file_info.was_deleted_without_creation():
+            logging.info(f"File #{file_info.file_number} was only deleted "
+                         f"in the log - skipping.")
+            continue
+
+        creation_event = file_info.creation_event
+        assert isinstance(creation_event, events.TableFileCreationEvent)
+        file_info_dict = {"status": "Alive",
+                          "created": file_info.creation_time,
+                          "deleted": ""}
+
+        deletion_event = file_info.deletion_event
+        if deletion_event:
+            assert isinstance(deletion_event, events.TableFileDeletionEvent)
+            file_info_dict["status"] = "Deleted"
+            file_info_dict["deleted"] = file_info.deletion_time
+
+        table_props_dict = creation_event.get_table_properties()
+        utils.delete_dict_keys(table_props_dict, ['compression_options'])
+
+        file_info_dict = \
+            utils.unify_dicts(file_info_dict,
+                              creation_event.get_event_data_dict(),
+                              favor_first=True)
+
+        # A table creation event sometimes includes a "oldest_blob_file_number"
+        # field, but not always. Remove it (not important).
+        fields_to_del = [EventField.TIME_MICROS,
+                         EventField.EVENT_TYPE,
+                         EventField.JOB_ID,
+                         EventField.TABLE_PROPERTIES,
+                         EventField.OLDEST_BLOB_FILE_NUM]
+        utils.delete_dict_keys(file_info_dict, fields_to_del)
+
+        file_info_dict = \
+            utils.unify_dicts(file_info_dict,
+                              table_props_dict,
+                              favor_first=True)
+
+        if header_line is None:
+            header_line = list(file_info_dict.keys())
+            writer.writerow(header_line)
+        else:
+            assert list(file_info_dict.keys()) == header_line
+        row = list(file_info_dict.values())
+        # assert len(row) == len(header_line)
+        writer.writerow(row)
+
+    if header_line is None:
+        return None
+
+    return f.getvalue()
+
+
 def generate_counters_csv(mngr, output_folder, report_to_console):
     counters_csv = get_counters_csv(mngr)
 
@@ -544,3 +610,22 @@ def generate_flushes_csv(
         f"{msg_start}{flushes_csv_path}", report_to_console,
         f"{msg_start}{flushes_csv_path.as_uri()}")
     return flushes_csv_path
+
+
+def generate_files_csv(
+        files_monitor, output_folder, report_to_console):
+    assert isinstance(files_monitor, db_files.DbFilesMonitor)
+
+    files_csv = get_files_csv(files_monitor)
+    if files_csv is None:
+        utils.print_msg("No Files to report", report_to_console)
+        return None
+
+    files_csv_path = utils.get_files_csv_file_path(output_folder)
+    with open(files_csv_path, "w") as f:
+        f.write(files_csv)
+    msg_start = "Files CSV Is in "
+    utils.print_msg(
+        f"{msg_start}{files_csv_path}", report_to_console,
+        f"{msg_start}{files_csv_path.as_uri()}")
+    return files_csv_path

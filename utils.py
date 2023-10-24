@@ -56,6 +56,7 @@ DEFAULT_TOOLS_HISTOGRAMS_FILE_NAME = "histograms_tools.csv"
 DEFAULT_COMPACTIONS_STATS_FILE_NAME = "compactions_stats.csv"
 DEFAULT_COMPACTIONS_FILE_NAME = "compactions.csv"
 DEFAULT_FLUSHES_FILE_NAME = "flushes.csv"
+DEFAULT_FILES_FILE_NAME = "files.csv"
 
 FILE_NOT_GENERATED_TEXT = "File Not Generated"
 DATA_UNAVAILABLE_TEXT = "Data Unavailable"
@@ -640,3 +641,7 @@ def get_compactions_csv_file_path(output_folder):
 
 def get_flushes_csv_file_path(output_folder):
     return get_file_path(output_folder, DEFAULT_FLUSHES_FILE_NAME)
+
+
+def get_files_csv_file_path(output_folder):
+    return get_file_path(output_folder, DEFAULT_FILES_FILE_NAME)
