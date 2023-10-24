@@ -849,6 +849,32 @@ def prepare_db_ingest_info_for_display(ingest_info):
     return disp
 
 
+def prepare_live_files_info_for_display(live_files_info):
+    assert isinstance(live_files_info, calc_utils.DbLiveFilesInfo)
+
+    disp = {}
+    if not live_files_info or live_files_info.total_size_bytes == 0:
+        return "No Live Files Info"
+
+    index_percentage_of_total = \
+        (live_files_info.total_index_size_bytes /
+         live_files_info.total_size_bytes) * 100
+    filter_percentage_of_total = \
+        (live_files_info.total_filter_size_bytes /
+         live_files_info.total_size_bytes) * 100
+    disp["Num Files"] = live_files_info.num_files
+    disp["Total Size (Uncompressed)"] =\
+        num_bytes_for_display(live_files_info.total_size_bytes)
+    disp["Index Blocks"] =  \
+        f"{num_bytes_for_display(live_files_info.total_index_size_bytes)} " \
+        f" ({index_percentage_of_total:.1f}%)"
+    disp["Filter Blocks"] =  \
+        f"{num_bytes_for_display(live_files_info.total_filter_size_bytes)} " \
+        f" ({filter_percentage_of_total:.1f}%)"
+
+    return disp
+
+
 def prepare_seek_stats_for_display(seek_stats):
     assert isinstance(seek_stats, calc_utils.SeekStats)
 
@@ -885,10 +911,13 @@ def prepare_block_stats_of_cache_for_display(block_stats):
 
     disp = dict()
 
+    disp["Total Size"] = \
+        num_bytes_for_display(block_stats.curr_total_live_size_bytes)
     disp["Avg. Size"] = \
         num_bytes_for_display(int(block_stats.get_avg_block_size()))
-    disp["Max Size"] = num_bytes_for_display(block_stats.max_size_bytes)
-    disp["Max Size At"] = block_stats.max_size_time
+    disp["Max Size"] = \
+        num_bytes_for_display(block_stats.largest_block_size_bytes)
+    disp["Max Size At"] = block_stats.largest_block_size_time
 
     return disp
 

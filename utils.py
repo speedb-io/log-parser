@@ -71,7 +71,7 @@ NO_READS_TEXT = "No Reads"
 NO_COMPACTIONS_TEXT = "No Compactions"
 NO_BLOCK_CACHE_STATS = "No Block Cache Statistics"
 NO_GROWTH_INFO_TEXT = "No Growth Information Available"
-
+NO_COMPRESSION = "NoCompression"
 
 # =====================================
 #           MISC UTILS

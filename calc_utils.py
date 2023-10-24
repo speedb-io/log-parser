@@ -494,6 +494,44 @@ def get_db_ingest_info(db_wide_stats_mngr):
         ingest_rate_mbps=cumulative_writes_stats.ingest_rate_mbps)
 
 
+@dataclass
+class DbLiveFilesInfo:
+    num_files: int = 0
+    total_size_bytes: int = 0
+    total_index_size_bytes: int = 0
+    total_filter_size_bytes: int = 0
+
+
+def get_live_files_info(db_files_monitor):
+    assert isinstance(db_files_monitor, db_files.DbFilesMonitor)
+
+    num_files = 0
+    total_data_size_bytes = 0
+    total_index_size_bytes = 0
+    total_filter_size_bytes = 0
+
+    for cf_name, cf_live_files_stats in \
+            db_files_monitor.live_files_stats.items():
+        assert isinstance(cf_live_files_stats, db_files.DbLiveFilesStats)
+        num_files += cf_live_files_stats.num_live
+        total_data_size_bytes += cf_live_files_stats.blocks_stats[
+            db_files.BlockType.DATA].curr_total_live_size_bytes
+        total_index_size_bytes += cf_live_files_stats.blocks_stats[
+            db_files.BlockType.INDEX].curr_total_live_size_bytes
+        total_filter_size_bytes += cf_live_files_stats.blocks_stats[
+            db_files.BlockType.FILTER].curr_total_live_size_bytes
+
+    total_size_bytes = \
+        total_data_size_bytes + total_index_size_bytes + \
+        total_filter_size_bytes
+
+    return DbLiveFilesInfo(
+        num_files=num_files,
+        total_size_bytes=total_size_bytes,
+        total_index_size_bytes=total_index_size_bytes,
+        total_filter_size_bytes=total_filter_size_bytes)
+
+
 def calc_event_histogram(cf_name, events_mngr, event_type, group_by_field):
     events = events_mngr.get_cf_events_by_type(cf_name, event_type)
 

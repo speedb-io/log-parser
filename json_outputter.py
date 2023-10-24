@@ -53,6 +53,15 @@ def get_db_size_json(parsed_log):
     else:
         db_size_json["Ingest"] = utils.DATA_UNAVAILABLE_TEXT
 
+    live_files_info = \
+        calc_utils.get_live_files_info(parsed_log.get_files_monitor())
+    if live_files_info:
+        live_files_json = \
+            display_utils.prepare_live_files_info_for_display(live_files_info)
+        db_size_json["Live Files"] = live_files_json
+    else:
+        db_size_json["Live Files"] = utils.DATA_UNAVAILABLE_TEXT
+
     cfs_growth_info = \
         calc_utils.calc_cfs_growth_info(cfs_names,
                                         compactions_stats_mngr)

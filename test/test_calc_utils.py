@@ -18,12 +18,15 @@ import calc_utils
 import db_options as db_opts
 import test.testing_utils as test_utils
 import utils
+import db_files
+import events
 from counters import CountersMngr
 from stats_mngr import CfFileHistogramStatsMngr
 from test.sample_log_info import SampleLogInfo
-
+import copy
 
 # TODO: Move to the stats mngr test file
+
 
 def test_get_cf_size_bytes():
     parsed_log = test_utils.create_parsed_log(SampleLogInfo.FILE_PATH)
@@ -537,3 +540,131 @@ def test_calc_total_growth_info():
           1: calc_utils.GrowthInfo(5, 6, 7, 8)},
          cf2: {1: calc_utils.GrowthInfo(None, None, 0, 0)}}) == \
         (2, 2, calc_utils.GrowthInfo(5, 6, 10, 12))
+
+
+def test_get_live_files_info():
+    cf1 = "cf1"
+    cf2 = "cf2"
+    cf_names = [cf1, cf2]
+
+    # Generate time series
+    start_time = "2022/06/16-15:36:02.993900"
+    jobs_ids = [i+1 for i in range(10)]
+    file_numbers = jobs_ids
+    times = test_utils.get_time_series(start_time, 1, 10)
+
+    # Test Func
+    get_info = calc_utils.get_live_files_info
+
+    def get_table_properties(total_keys_sizes_bytes,
+                             total_values_sizes_bytes,
+                             index_size_bytes,
+                             filter_size_bytes):
+        table_vars = copy.deepcopy(test_utils.TablePropertiesTestVars())
+        table_vars.total_keys_sizes_bytes = total_keys_sizes_bytes
+        table_vars.total_values_sizes_bytes = total_values_sizes_bytes
+        table_vars.index_size_bytes = index_size_bytes
+        table_vars.filter_size_bytes = filter_size_bytes
+        return test_utils.get_table_properties(table_vars)
+
+    monitor = db_files.DbFilesMonitor()
+
+    zero_live_files_info = \
+        calc_utils.DbLiveFilesInfo(
+            total_size_bytes=0,
+            total_index_size_bytes=0,
+            total_filter_size_bytes=0)
+    assert get_info(monitor) == zero_live_files_info
+
+    table_props1 = get_table_properties(total_keys_sizes_bytes=30,
+                                        total_values_sizes_bytes=70,
+                                        index_size_bytes=200,
+                                        filter_size_bytes=300)
+    table_props2 = get_table_properties(total_keys_sizes_bytes=200,
+                                        total_values_sizes_bytes=300,
+                                        index_size_bytes=600,
+                                        filter_size_bytes=700)
+
+    idx = 0
+    file1_creation_event =\
+        test_utils.create_event(
+            jobs_ids[idx], cf_names, times[idx],
+            events.EventType.TABLE_FILE_CREATION, cf1,
+            file_number=file_numbers[idx],
+            table_properties=table_props1)
+    monitor.new_event(file1_creation_event)
+    expected_info =\
+        calc_utils.DbLiveFilesInfo(
+            num_files=1,
+            total_size_bytes=600,
+            total_index_size_bytes=200,
+            total_filter_size_bytes=300)
+    assert get_info(monitor) == expected_info
+
+    idx += 1
+    file1_deletion_event = \
+        test_utils.create_event(
+            jobs_ids[idx], cf_names, times[idx],
+            events.EventType.TABLE_FILE_DELETION, cf1,
+            file_number=file_numbers[0])
+    monitor.new_event(file1_deletion_event)
+    assert get_info(monitor) == zero_live_files_info
+
+    idx += 1
+    file2_deletion_event = \
+        test_utils.create_event(
+            jobs_ids[idx], cf_names, times[idx],
+            events.EventType.TABLE_FILE_DELETION, cf1,
+            file_number=file_numbers[idx])
+    monitor.new_event(file2_deletion_event)
+    assert get_info(monitor) == zero_live_files_info
+
+    idx += 1
+    file3_creation_event =\
+        test_utils.create_event(
+            jobs_ids[idx], cf_names, times[idx],
+            events.EventType.TABLE_FILE_CREATION, cf2,
+            file_number=file_numbers[2],
+            table_properties=table_props1)
+    idx += 1
+    file4_creation_event =\
+        test_utils.create_event(
+            jobs_ids[idx], cf_names, times[idx],
+            events.EventType.TABLE_FILE_CREATION, cf2,
+            file_number=file_numbers[3],
+            table_properties=table_props2)
+    monitor.new_event(file3_creation_event)
+    monitor.new_event(file4_creation_event)
+
+    expected_info =\
+        calc_utils.DbLiveFilesInfo(
+            num_files=2,
+            total_size_bytes=2400,
+            total_index_size_bytes=800,
+            total_filter_size_bytes=1000)
+    assert get_info(monitor) == expected_info
+
+    idx += 1
+    file3_deletion_event =\
+        test_utils.create_event(
+            jobs_ids[idx], cf_names, times[idx],
+            events.EventType.TABLE_FILE_DELETION, cf2,
+            file_number=file_numbers[2])
+    monitor.new_event(file3_deletion_event)
+
+    expected_info =\
+        calc_utils.DbLiveFilesInfo(
+            num_files=1,
+            total_size_bytes=1800,
+            total_index_size_bytes=600,
+            total_filter_size_bytes=700)
+    assert get_info(monitor) == expected_info
+
+    idx += 1
+    file4_deletion_event =\
+        test_utils.create_event(
+            jobs_ids[idx], cf_names, times[idx],
+            events.EventType.TABLE_FILE_DELETION, cf2,
+            file_number=file_numbers[3])
+    monitor.new_event(file4_deletion_event)
+    assert get_info(monitor) == zero_live_files_info

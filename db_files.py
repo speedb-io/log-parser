@@ -15,7 +15,7 @@ class DbFileInfo:
     deletion_time: str = None
     # TODO - Remove
     size_bytes: int = 0
-    compressed_size_bytes: int = 0
+    compressed_file_size_bytes: int = 0
     compressed_data_size_bytes: int = 0
     data_size_bytes: int = 0
     index_size_bytes: int = 0
@@ -45,23 +45,26 @@ class DbFileInfo:
 class BlockType(Enum):
     INDEX = auto()
     FILTER = auto()
+    DATA = auto()
 
 
 class BlockLiveFileStats:
     def __init__(self):
+        # TODO - Remove
         self.num_created = 0
+        # TODO - Remove
         self.num_live = 0
         # Total size of all the blocks in created files (never decreasing)
         self.total_created_size_bytes = 0
 
-        # Current total size of live indexes / filters
+        # Current total size of live blocks of this type
         self.curr_total_live_size_bytes = 0
 
         # The size of the largest block created and its creation time
-        self.max_size_bytes = 0
-        self.max_size_time = None
+        self.largest_block_size_bytes = 0
+        self.largest_block_size_time = None
 
-        # The max total size at some point in time
+        # The max total live size at some point in time
         self.max_total_live_size_bytes = 0
         self.max_total_live_size_time = None
 
@@ -74,8 +77,9 @@ class BlockLiveFileStats:
             other.total_created_size_bytes and \
             self.curr_total_live_size_bytes == \
             other.curr_total_live_size_bytes and \
-            self.max_size_bytes == other.max_size_bytes and \
-            self.max_size_time == other.max_size_time
+            self.largest_block_size_bytes == \
+            other.largest_block_size_bytes and \
+            self.largest_block_size_time == other.largest_block_size_time
         # These are incorrect when there is more than a single cf
         # and \
         # self.max_total_live_size_bytes == \
@@ -91,9 +95,9 @@ class BlockLiveFileStats:
         self.total_created_size_bytes += size_bytes
         self.curr_total_live_size_bytes += size_bytes
 
-        if self.max_size_bytes < size_bytes:
-            self.max_size_bytes = size_bytes
-            self.max_size_time = time
+        if self.largest_block_size_bytes < size_bytes:
+            self.largest_block_size_bytes = size_bytes
+            self.largest_block_size_time = time
 
         if self.max_total_live_size_bytes <\
                 self.curr_total_live_size_bytes:
@@ -125,6 +129,7 @@ class DbLiveFilesStats:
         self.num_live = 0
 
         self.blocks_stats = {
+            BlockType.DATA: BlockLiveFileStats(),
             BlockType.INDEX: BlockLiveFileStats(),
             BlockType.FILTER: BlockLiveFileStats()
         }
@@ -134,6 +139,8 @@ class DbLiveFilesStats:
 
         self.num_created += 1
         self.num_live += 1
+        self.blocks_stats[BlockType.DATA].block_created(
+            file_info.data_size_bytes, file_info.creation_time)
         self.blocks_stats[BlockType.INDEX].block_created(
             file_info.index_size_bytes, file_info.creation_time)
         self.blocks_stats[BlockType.FILTER].block_created(
@@ -146,6 +153,8 @@ class DbLiveFilesStats:
         assert self.num_live <= self.num_created
         self.num_live -= 1
 
+        self.blocks_stats[BlockType.DATA].block_deleted(
+            file_info.data_size_bytes)
         self.blocks_stats[BlockType.INDEX].block_deleted(
             file_info.index_size_bytes)
         self.blocks_stats[BlockType.FILTER].block_deleted(
@@ -183,7 +192,7 @@ class DbFilesMonitor:
                                cf_name=cf_name,
                                creation_time=event.get_log_time())
         file_info.creation_event = event
-        file_info.compressed_size_bytes = \
+        file_info.compressed_file_size_bytes = \
             event.get_compressed_file_size_bytes()
         file_info.compressed_data_size_bytes = \
             event.get_compressed_data_size_bytes()
@@ -307,6 +316,7 @@ def get_block_stats_for_cfs_group(cfs_names, files_monitor, block_type):
         assert block_type in blocks_stats_all_cfs[cf_name]
         if stats is None:
             stats = copy.deepcopy(blocks_stats_all_cfs[cf_name][block_type])
+            assert isinstance(stats, BlockLiveFileStats)
         else:
             block_stats = blocks_stats_all_cfs[cf_name][block_type]
             assert isinstance(block_stats, BlockLiveFileStats)
@@ -316,9 +326,12 @@ def get_block_stats_for_cfs_group(cfs_names, files_monitor, block_type):
                 block_stats.total_created_size_bytes
             stats.curr_total_live_size_bytes += \
                 block_stats.curr_total_live_size_bytes
-            if stats.max_size_bytes < block_stats.max_size_bytes:
-                stats.max_size_bytes = block_stats.max_size_bytes
-                stats.max_size_time = block_stats.max_size_time
+            if stats.largest_block_size_bytes < \
+                    block_stats.largest_block_size_bytes:
+                stats.largest_block_size_bytes = \
+                    block_stats.largest_block_size_bytes
+                stats.largest_block_size_time = \
+                    block_stats.largest_block_size_time
             stats.max_total_live_size_bytes += \
                 block_stats.max_total_live_size_bytes
 
