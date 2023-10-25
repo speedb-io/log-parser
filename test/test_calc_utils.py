@@ -13,6 +13,7 @@
 # limitations under the License.'''
 
 from dataclasses import dataclass
+import random
 
 import calc_utils
 import db_options as db_opts
@@ -24,6 +25,23 @@ from counters import CountersMngr
 from stats_mngr import CfFileHistogramStatsMngr
 from test.sample_log_info import SampleLogInfo
 import copy
+
+
+# Global Vars (GV)
+class GV:
+    cf1 = "cf1"
+    cf2 = "cf2"
+    cf_names = [cf1, cf2]
+
+    start_time = "2022/06/16-15:36:02.993900"
+    jobs_ids = [i + 1 for i in range(10)]
+    file_numbers = jobs_ids
+    times = test_utils.get_time_series(start_time, 1, 10)
+    idx = 0
+
+    @staticmethod
+    def reset():
+        GV.idx = 0
 
 # TODO: Move to the stats mngr test file
 
@@ -64,11 +82,9 @@ def test_calc_read_latency_per_cf_stats():
     l0 = 0
     l1 = 1
     l4 = 4
-    cf1 = "cf1"
-    cf2 = "cf2"
 
     stats_lines_cf1 = \
-    f'''** File Read Latency Histogram By Level [{cf1}] **
+    f'''** File Read Latency Histogram By Level [{GV.cf1}] **
     ** Level {l0} read latency histogram (micros):
     Count: 100 Average: 1.5  StdDev: 34.39
     Min: 0  Median: 2.4427  Max: 1000
@@ -83,7 +99,7 @@ def test_calc_read_latency_per_cf_stats():
 
     mngr = CfFileHistogramStatsMngr()
 
-    mngr.add_lines(time, cf1, stats_lines_cf1)
+    mngr.add_lines(time, GV.cf1, stats_lines_cf1)
     total_reads_cf1 = 100 + 200
     expected_cf1_avg_read_latency_us = (100*1.5 + 200*2.5) / total_reads_cf1
     expected_cf1_stats = \
@@ -94,10 +110,10 @@ def test_calc_read_latency_per_cf_stats():
             read_percent_of_all_cfs=100.0)
 
     actual_stats = calc_utils.calc_read_latency_per_cf_stats(mngr)
-    assert actual_stats == {cf1: expected_cf1_stats}
+    assert actual_stats == {GV.cf1: expected_cf1_stats}
 
     stats_lines_cf2 = \
-        f'''** File Read Latency Histogram By Level [{cf2}] **
+        f'''** File Read Latency Histogram By Level [{GV.cf2}] **
     ** Level {l1} read latency histogram (micros):
     Count: 1000 Average: 2.5  StdDev: 34.39
     Min: 0  Median: 2.4427  Max: 20000
@@ -110,7 +126,7 @@ def test_calc_read_latency_per_cf_stats():
     stats_lines_cf2 = stats_lines_cf2.splitlines()
     stats_lines_cf2 = [line.strip() for line in stats_lines_cf2]
 
-    mngr.add_lines(time, cf2, stats_lines_cf2)
+    mngr.add_lines(time, GV.cf2, stats_lines_cf2)
     total_reads = 300 + 1500
     total_reads_cf2 = 1000 + 500
     expected_cf1_stats.read_percent_of_all_cfs = \
@@ -126,8 +142,8 @@ def test_calc_read_latency_per_cf_stats():
             read_percent_of_all_cfs=expected_cf2_read_percent_of_all_cfs)
 
     actual_stats = calc_utils.calc_read_latency_per_cf_stats(mngr)
-    assert actual_stats == {cf1: expected_cf1_stats,
-                            cf2: expected_cf2_stats}
+    assert actual_stats == {GV.cf1: expected_cf1_stats,
+                            GV.cf2: expected_cf2_stats}
 
 
 @dataclass
@@ -171,14 +187,14 @@ def get_seek_counter_and_histogram_entry(test_seek_info):
 def test_get_applicable_seek_stats():
     get_seek_stats = calc_utils.get_applicable_seek_stats
 
-    start_time = "2022/06/16-15:36:02.993900"
-    start_plus_1_second = utils.get_time_relative_to(start_time, num_seconds=1)
+    start_plus_1_second = utils.get_time_relative_to(GV.start_time,
+                                                     num_seconds=1)
     start_plus_10_seconds = \
-        utils.get_time_relative_to(start_time, num_seconds=10)
+        utils.get_time_relative_to(GV.start_time, num_seconds=10)
     start_plus_20_seconds = \
-        utils.get_time_relative_to(start_time, num_seconds=20)
+        utils.get_time_relative_to(GV.start_time, num_seconds=20)
 
-    start_seek_stats = SeekInfo(start_time)
+    start_seek_stats = SeekInfo(GV.start_time)
     start_entry = get_seek_counter_and_histogram_entry(start_seek_stats)
 
     start_plus_1_seek_stats = SeekInfo(start_plus_1_second)
@@ -205,7 +221,7 @@ def test_get_applicable_seek_stats():
 
     assert mngr.try_adding_entries(start_entry, 0) == (True, 1)
     assert mngr.get_last_counter_entry('rocksdb.number.db.seek') == \
-           {'time': start_time, 'value': 0}
+           {'time': GV.start_time, 'value': 0}
     assert get_seek_stats(mngr) is None
 
     assert mngr.try_adding_entries(start_plus_1_seek_entry, 0) == (True, 1)
@@ -251,9 +267,6 @@ TABLE_SECTION_TYPE = db_opts.SectionType.TABLE_OPTIONS
 def test_get_cfs_common_and_specific_options():
     get_opts = calc_utils.get_cfs_common_and_specific_options
 
-    cf1 = 'cf1'
-    cf2 = 'cf2'
-
     cf_option1 = "CF-Option1"
     cf_option2 = "CF-Option2"
     cf_option3 = "CF-Option3"
@@ -275,105 +288,109 @@ def test_get_cfs_common_and_specific_options():
     dbo = db_opts.DatabaseOptions()
     assert get_opts(dbo) == ({}, {})
 
-    dbo.set_cf_option(cf1, cf_option1, 1, allow_new_option=True)
+    dbo.set_cf_option(GV.cf1, cf_option1, 1, allow_new_option=True)
     expected_common = {full_cf_option1_name: 1}
-    expected_specific = {cf1: {}}
+    expected_specific = {GV.cf1: {}}
     assert get_opts(dbo) == (expected_common, expected_specific)
 
-    dbo.set_cf_option(cf1, cf_option2, 2, allow_new_option=True)
+    dbo.set_cf_option(GV.cf1, cf_option2, 2, allow_new_option=True)
     expected_common = {
         full_cf_option1_name: 1,
         full_cf_option2_name: 2
     }
-    expected_specific = {cf1: {}}
+    expected_specific = {GV.cf1: {}}
     assert get_opts(dbo) == (expected_common, expected_specific)
 
-    dbo.set_cf_option(cf2, cf_option3, 3, allow_new_option=True)
+    dbo.set_cf_option(GV.cf2, cf_option3, 3, allow_new_option=True)
     expected_common = {}
     expected_specific = {
-        cf1: {full_cf_option1_name: 1,
-              full_cf_option2_name: 2},
-        cf2: {full_cf_option3_name: 3}
+        GV.cf1: {full_cf_option1_name: 1,
+                 full_cf_option2_name: 2},
+        GV.cf2: {full_cf_option3_name: 3}
     }
     assert get_opts(dbo) == (expected_common, expected_specific)
 
-    dbo.set_cf_option(cf2, cf_option1, 1, allow_new_option=True)
+    dbo.set_cf_option(GV.cf2, cf_option1, 1, allow_new_option=True)
     expected_common = {full_cf_option1_name: 1}
     expected_specific = {
-        cf1: {full_cf_option2_name: 2},
-        cf2: {full_cf_option3_name: 3}
+        GV.cf1: {full_cf_option2_name: 2},
+        GV.cf2: {full_cf_option3_name: 3}
     }
     assert get_opts(dbo) == (expected_common, expected_specific)
 
-    dbo.set_cf_option(cf2, cf_option1, 5)
+    dbo.set_cf_option(GV.cf2, cf_option1, 5)
     expected_common = {}
     expected_specific = {
-        cf1: {full_cf_option1_name: 1,
-              full_cf_option2_name: 2},
-        cf2: {full_cf_option1_name: 5,
-              full_cf_option3_name: 3}
+        GV.cf1: {full_cf_option1_name: 1,
+                 full_cf_option2_name: 2},
+        GV.cf2: {full_cf_option1_name: 5,
+                 full_cf_option3_name: 3}
     }
     assert get_opts(dbo) == (expected_common, expected_specific)
 
-    dbo.set_cf_table_option(cf2, cf_table_option1, 100, allow_new_option=True)
+    dbo.set_cf_table_option(GV.cf2, cf_table_option1, 100,
+                            allow_new_option=True)
     expected_common = {}
     expected_specific = {
-        cf1: {full_cf_option1_name: 1,
-              full_cf_option2_name: 2},
-        cf2: {full_cf_option1_name: 5,
-              full_cf_option3_name: 3,
-              full_cf_table_option1_name: 100}
+        GV.cf1: {full_cf_option1_name: 1,
+                 full_cf_option2_name: 2},
+        GV.cf2: {full_cf_option1_name: 5,
+                 full_cf_option3_name: 3,
+                 full_cf_table_option1_name: 100}
     }
     assert get_opts(dbo) == (expected_common, expected_specific)
 
-    dbo.set_cf_table_option(cf1, cf_table_option1, 100, allow_new_option=True)
+    dbo.set_cf_table_option(GV.cf1, cf_table_option1, 100,
+                            allow_new_option=True)
     expected_common = {full_cf_table_option1_name: 100}
     expected_specific = {
-        cf1: {full_cf_option1_name: 1,
-              full_cf_option2_name: 2},
-        cf2: {full_cf_option1_name: 5,
-              full_cf_option3_name: 3}
+        GV.cf1: {full_cf_option1_name: 1,
+                 full_cf_option2_name: 2},
+        GV.cf2: {full_cf_option1_name: 5,
+                 full_cf_option3_name: 3}
     }
     assert get_opts(dbo) == (expected_common, expected_specific)
 
-    dbo.set_cf_table_option(cf1, cf_table_option2, 200, allow_new_option=True)
+    dbo.set_cf_table_option(GV.cf1, cf_table_option2, 200,
+                            allow_new_option=True)
     expected_common = {full_cf_table_option1_name: 100}
     expected_specific = {
-        cf1: {full_cf_option1_name: 1,
-              full_cf_option2_name: 2,
-              full_cf_table_option2_name: 200},
-        cf2: {full_cf_option1_name: 5,
-              full_cf_option3_name: 3}
+        GV.cf1: {full_cf_option1_name: 1,
+                 full_cf_option2_name: 2,
+                 full_cf_table_option2_name: 200},
+        GV.cf2: {full_cf_option1_name: 5,
+                 full_cf_option3_name: 3}
     }
     assert get_opts(dbo) == (expected_common, expected_specific)
 
-    dbo.set_cf_table_option(cf2, cf_table_option2, 200, allow_new_option=True)
+    dbo.set_cf_table_option(GV.cf2, cf_table_option2, 200,
+                            allow_new_option=True)
     expected_common = {
         full_cf_table_option1_name: 100,
         full_cf_table_option2_name: 200
     }
     expected_specific = {
-        cf1: {full_cf_option1_name: 1,
-              full_cf_option2_name: 2},
-        cf2: {full_cf_option1_name: 5,
-              full_cf_option3_name: 3}
+        GV.cf1: {full_cf_option1_name: 1,
+                 full_cf_option2_name: 2},
+        GV.cf2: {full_cf_option1_name: 5,
+                 full_cf_option3_name: 3}
     }
     assert get_opts(dbo) == (expected_common, expected_specific)
 
-    dbo.set_cf_option(cf1, cf_option3, 3, allow_new_option=True)
+    dbo.set_cf_option(GV.cf1, cf_option3, 3, allow_new_option=True)
     expected_common = {
         full_cf_option3_name: 3,
         full_cf_table_option1_name: 100,
         full_cf_table_option2_name: 200
     }
     expected_specific = {
-        cf1: {full_cf_option1_name: 1,
-              full_cf_option2_name: 2},
-        cf2: {full_cf_option1_name: 5}
+        GV.cf1: {full_cf_option1_name: 1,
+                 full_cf_option2_name: 2},
+        GV.cf2: {full_cf_option1_name: 5}
     }
     assert get_opts(dbo) == (expected_common, expected_specific)
 
-    dbo.set_cf_option(cf1, cf_option1, 5)
+    dbo.set_cf_option(GV.cf1, cf_option1, 5)
     expected_common = {
         full_cf_option1_name: 5,
         full_cf_option3_name: 3,
@@ -381,12 +398,12 @@ def test_get_cfs_common_and_specific_options():
         full_cf_table_option2_name: 200
     }
     expected_specific = {
-        cf1: {full_cf_option2_name: 2},
-        cf2: {}
+        GV.cf1: {full_cf_option2_name: 2},
+        GV.cf2: {}
     }
     assert get_opts(dbo) == (expected_common, expected_specific)
 
-    dbo.set_cf_option(cf2, cf_option2, 2, allow_new_option=True)
+    dbo.set_cf_option(GV.cf2, cf_option2, 2, allow_new_option=True)
     expected_common = {
         full_cf_option1_name: 5,
         full_cf_option2_name: 2,
@@ -395,8 +412,8 @@ def test_get_cfs_common_and_specific_options():
         full_cf_table_option2_name: 200
     }
     expected_specific = {
-        cf1: {},
-        cf2: {}
+        GV.cf1: {},
+        GV.cf2: {}
     }
     assert get_opts(dbo) == (expected_common, expected_specific)
 
@@ -406,17 +423,12 @@ def test_get_cfs_common_and_specific_diff_dicts():
 
     # db_cf = utils.NO_CF
     dflt_cf = utils.DEFAULT_CF_NAME
-    cf1 = 'cf1'
-    # cf2 = 'cf2'
 
     db_option1 = "DB-Options1"
     db_option2 = "DB-Options2"
 
     cf_option1 = "CF-Option1"
     cf_option2 = "CF-Option2"
-    # cf_option3 = "CF-Option3"
-    # cf_table_option1 = "CF-Table-Option1"
-    # cf_table_option2 = "CF-Table-Option2"
 
     full_cf_option1_name = db_opts.get_full_option_name(CF_SECTION_TYPE,
                                                         cf_option1)
@@ -457,105 +469,89 @@ def test_get_cfs_common_and_specific_diff_dicts():
         full_cf_option1_name: (11, 10)}
     assert actual_specific == {dflt_cf: None}
 
-    log_dbo.set_cf_option(cf1, cf_option2, 20, allow_new_option=True)
+    log_dbo.set_cf_option(GV.cf1, cf_option2, 20, allow_new_option=True)
     # base (dflt): opt1=11, opt2=20
     # log: dflt: opt1=10,  opt2=20
-    #      cf1:  Missing   opt2=20
+    #      GV.cf1:  Missing   opt2=20
     # Expected diff: Common: None (opt2 identical)
-    #                Specific: dflt: (11, 10), cf1: (11, Missing)
+    #                Specific: dflt: (11, 10), GV.cf1: (11, Missing)
     actual_common, actual_specific = get_cfs_diff(base_dbo, log_dbo)
     actual_dflt = extract_dict(actual_specific[dflt_cf])
-    actual_cf1 = extract_dict(actual_specific[cf1])
+    actual_cf1 = extract_dict(actual_specific[GV.cf1])
     assert actual_common == {}
     assert actual_dflt == {full_cf_option1_name: (11, 10)}
     assert actual_cf1 == {full_cf_option1_name: (11, "Missing")}
 
-    log_dbo.set_cf_option(cf1, cf_option1, 11, allow_new_option=True)
+    log_dbo.set_cf_option(GV.cf1, cf_option1, 11, allow_new_option=True)
     # base (dflt): opt1=11, opt2=20
     # log: dflt: opt1=10,  opt2=20
-    #      cf1:  opt1=11   opt2=20
+    #      GV.cf1:  opt1=11   opt2=20
     # Expected diff: Common: None (opt2 identical)
-    #                Specific: dflt: (11, 10), cf1: None
+    #                Specific: dflt: (11, 10), GV.cf1: None
     actual_common, actual_specific = get_cfs_diff(base_dbo, log_dbo)
     actual_dflt = extract_dict(actual_specific[dflt_cf])
     assert actual_common == {}
     assert actual_dflt == {full_cf_option1_name: (11, 10)}
-    assert actual_specific[cf1] is None
+    assert actual_specific[GV.cf1] is None
 
 
 def test_calc_total_growth_info():
     total_growth = calc_utils.calc_total_growth_info
 
-    cf1 = 'cf1'
-    cf2 = 'cf2'
-
     assert total_growth({}) == (0, 0, calc_utils.GrowthInfo())
 
     assert total_growth(
-        {cf1: {0: calc_utils.GrowthInfo()}}) == \
+        {GV.cf1: {0: calc_utils.GrowthInfo()}}) == \
         (0, 1, calc_utils.GrowthInfo())
 
     assert total_growth(
-        {cf1: {0: calc_utils.GrowthInfo(1, 2, 3, 4)}}) == \
+        {GV.cf1: {0: calc_utils.GrowthInfo(1, 2, 3, 4)}}) == \
         (1, 1, calc_utils.GrowthInfo(1, 2, 3, 4))
 
     assert total_growth(
-        {cf1: {0: calc_utils.GrowthInfo(None, 2, 0, 4)}}) == \
+        {GV.cf1: {0: calc_utils.GrowthInfo(None, 2, 0, 4)}}) == \
         (1, 1, calc_utils.GrowthInfo(0, 0, 0, 0))
 
     assert total_growth(
-        {cf1: {0: calc_utils.GrowthInfo(None, None, 3, 4)}}) == \
+        {GV.cf1: {0: calc_utils.GrowthInfo(None, None, 3, 4)}}) == \
         (1, 1, calc_utils.GrowthInfo(0, 0, 3, 4))
 
     assert total_growth(
-        {cf1: {0: calc_utils.GrowthInfo(1, 2, None, None)}}) == \
+        {GV.cf1: {0: calc_utils.GrowthInfo(1, 2, None, None)}}) == \
         (0, 1, calc_utils.GrowthInfo())
 
     assert total_growth(
-        {cf1:
+        {GV.cf1:
          {0: calc_utils.GrowthInfo(1, 2, 3, 4),
           1: calc_utils.GrowthInfo(5, 6, 7, 8)}}) == \
         (1, 1, calc_utils.GrowthInfo(6, 8, 10, 12))
 
     assert total_growth(
-        {cf1:
+        {GV.cf1:
          {0: calc_utils.GrowthInfo(None, 2, 0, 0),
           1: calc_utils.GrowthInfo(5, 6, 7, 8)}}) == \
         (1, 1, calc_utils.GrowthInfo(5, 6, 7, 8))
 
     assert total_growth(
-        {cf1:
+        {GV.cf1:
          {0: calc_utils.GrowthInfo(None, 2, 3, 4),
           1: calc_utils.GrowthInfo(5, 6, 7, 8)}}) == \
         (1, 1, calc_utils.GrowthInfo(5, 6, 10, 12))
 
     assert total_growth(
-        {cf1: {0: calc_utils.GrowthInfo(1, 2, 3, 4)},
-         cf2: {1: calc_utils.GrowthInfo(5, 6, 7, 8)}}) == \
+        {GV.cf1: {0: calc_utils.GrowthInfo(1, 2, 3, 4)},
+         GV.cf2: {1: calc_utils.GrowthInfo(5, 6, 7, 8)}}) == \
         (2, 2, calc_utils.GrowthInfo(6, 8, 10, 12))
 
     assert total_growth(
-        {cf1:
+        {GV.cf1:
          {0: calc_utils.GrowthInfo(None, 2, 3, 4),
           1: calc_utils.GrowthInfo(5, 6, 7, 8)},
-         cf2: {1: calc_utils.GrowthInfo(None, None, 0, 0)}}) == \
+         GV.cf2: {1: calc_utils.GrowthInfo(None, None, 0, 0)}}) == \
         (2, 2, calc_utils.GrowthInfo(5, 6, 10, 12))
 
 
 def test_get_live_files_info():
-    cf1 = "cf1"
-    cf2 = "cf2"
-    cf_names = [cf1, cf2]
-
-    # Generate time series
-    start_time = "2022/06/16-15:36:02.993900"
-    jobs_ids = [i+1 for i in range(10)]
-    file_numbers = jobs_ids
-    times = test_utils.get_time_series(start_time, 1, 10)
-
-    # Test Func
-    get_info = calc_utils.get_live_files_info
-
     def get_table_properties(total_keys_sizes_bytes,
                              total_values_sizes_bytes,
                              index_size_bytes,
@@ -566,6 +562,9 @@ def test_get_live_files_info():
         table_vars.index_size_bytes = index_size_bytes
         table_vars.filter_size_bytes = filter_size_bytes
         return test_utils.get_table_properties(table_vars)
+
+    # Test Func
+    get_info = calc_utils.get_live_files_info
 
     monitor = db_files.DbFilesMonitor()
 
@@ -585,12 +584,12 @@ def test_get_live_files_info():
                                         index_size_bytes=600,
                                         filter_size_bytes=700)
 
-    idx = 0
+    GV.idx = 0
     file1_creation_event =\
         test_utils.create_event(
-            jobs_ids[idx], cf_names, times[idx],
-            events.EventType.TABLE_FILE_CREATION, cf1,
-            file_number=file_numbers[idx],
+            GV.jobs_ids[GV.idx], GV.cf_names, GV.times[GV.idx],
+            events.EventType.TABLE_FILE_CREATION, GV.cf1,
+            file_number=GV.file_numbers[GV.idx],
             table_properties=table_props1)
     monitor.new_event(file1_creation_event)
     expected_info =\
@@ -601,37 +600,37 @@ def test_get_live_files_info():
             total_filter_size_bytes=300)
     assert get_info(monitor) == expected_info
 
-    idx += 1
+    GV.idx += 1
     file1_deletion_event = \
         test_utils.create_event(
-            jobs_ids[idx], cf_names, times[idx],
-            events.EventType.TABLE_FILE_DELETION, cf1,
-            file_number=file_numbers[0])
+            GV.jobs_ids[GV.idx], GV.cf_names, GV.times[GV.idx],
+            events.EventType.TABLE_FILE_DELETION, GV.cf1,
+            file_number=GV.file_numbers[0])
     monitor.new_event(file1_deletion_event)
     assert get_info(monitor) == zero_live_files_info
 
-    idx += 1
+    GV.idx += 1
     file2_deletion_event = \
         test_utils.create_event(
-            jobs_ids[idx], cf_names, times[idx],
-            events.EventType.TABLE_FILE_DELETION, cf1,
-            file_number=file_numbers[idx])
+            GV.jobs_ids[GV.idx], GV.cf_names, GV.times[GV.idx],
+            events.EventType.TABLE_FILE_DELETION, GV.cf1,
+            file_number=GV.file_numbers[GV.idx])
     monitor.new_event(file2_deletion_event)
     assert get_info(monitor) == zero_live_files_info
 
-    idx += 1
+    GV.idx += 1
     file3_creation_event =\
         test_utils.create_event(
-            jobs_ids[idx], cf_names, times[idx],
-            events.EventType.TABLE_FILE_CREATION, cf2,
-            file_number=file_numbers[2],
+            GV.jobs_ids[GV.idx], GV.cf_names, GV.times[GV.idx],
+            events.EventType.TABLE_FILE_CREATION, GV.cf2,
+            file_number=GV.file_numbers[2],
             table_properties=table_props1)
-    idx += 1
+    GV.idx += 1
     file4_creation_event =\
         test_utils.create_event(
-            jobs_ids[idx], cf_names, times[idx],
-            events.EventType.TABLE_FILE_CREATION, cf2,
-            file_number=file_numbers[3],
+            GV.jobs_ids[GV.idx], GV.cf_names, GV.times[GV.idx],
+            events.EventType.TABLE_FILE_CREATION, GV.cf2,
+            file_number=GV.file_numbers[3],
             table_properties=table_props2)
     monitor.new_event(file3_creation_event)
     monitor.new_event(file4_creation_event)
@@ -644,12 +643,12 @@ def test_get_live_files_info():
             total_filter_size_bytes=1000)
     assert get_info(monitor) == expected_info
 
-    idx += 1
+    GV.idx += 1
     file3_deletion_event =\
         test_utils.create_event(
-            jobs_ids[idx], cf_names, times[idx],
-            events.EventType.TABLE_FILE_DELETION, cf2,
-            file_number=file_numbers[2])
+            GV.jobs_ids[GV.idx], GV.cf_names, GV.times[GV.idx],
+            events.EventType.TABLE_FILE_DELETION, GV.cf2,
+            file_number=GV.file_numbers[2])
     monitor.new_event(file3_deletion_event)
 
     expected_info =\
@@ -660,11 +659,163 @@ def test_get_live_files_info():
             total_filter_size_bytes=700)
     assert get_info(monitor) == expected_info
 
-    idx += 1
+    GV.idx += 1
     file4_deletion_event =\
         test_utils.create_event(
-            jobs_ids[idx], cf_names, times[idx],
-            events.EventType.TABLE_FILE_DELETION, cf2,
-            file_number=file_numbers[3])
+            GV.jobs_ids[GV.idx], GV.cf_names, GV.times[GV.idx],
+            events.EventType.TABLE_FILE_DELETION, GV.cf2,
+            file_number=GV.file_numbers[3])
     monitor.new_event(file4_deletion_event)
     assert get_info(monitor) == zero_live_files_info
+
+
+def test_get_files_compression_info():
+    @dataclass
+    class UncompressedComponents:
+        total_keys_size_bytes: int = 0
+        total_values_size_bytes: int = 0
+        index_size_bytes: int = 0
+        filter_size_bytes: int = 0
+
+    def get_uncompressed_components(total_uncompressed_size_bytes):
+        assert total_uncompressed_size_bytes >= 1000
+
+        total_keys_size_bytes =\
+            random.randint(5, max(5, int(total_uncompressed_size_bytes/10)))
+        total_values_size_bytes =\
+            random.randint(10, max(10, int(total_uncompressed_size_bytes/10)))
+        index_size_bytes =\
+            random.randint(15, max(15,  int(total_uncompressed_size_bytes/20)))
+
+        filter_size_bytes = total_uncompressed_size_bytes - \
+            total_keys_size_bytes - total_values_size_bytes - \
+            index_size_bytes
+
+        return UncompressedComponents(
+            total_keys_size_bytes=total_keys_size_bytes,
+            total_values_size_bytes=total_values_size_bytes,
+            index_size_bytes=index_size_bytes,
+            filter_size_bytes=filter_size_bytes)
+
+    def get_table_properties(total_uncompressed_size_bytes, compression_type):
+        table_vars = copy.deepcopy(test_utils.TablePropertiesTestVars())
+        uncompressed_components = \
+            get_uncompressed_components(total_uncompressed_size_bytes)
+
+        table_vars.total_keys_sizes_bytes = \
+            uncompressed_components.total_keys_size_bytes
+        table_vars.total_values_sizes_bytes = \
+            uncompressed_components.total_values_size_bytes
+        table_vars.index_size_bytes = \
+            uncompressed_components.index_size_bytes
+        table_vars.filter_size_bytes = \
+            uncompressed_components.filter_size_bytes
+        table_vars.compression_type = compression_type
+        return test_utils.get_table_properties(table_vars)
+
+    def get_creation_event_uncompressed(
+            cf_name, total_uncompressed_size_bytes):
+        table_props = get_table_properties(total_uncompressed_size_bytes,
+                                           utils.NO_COMPRESSION)
+        creation_event = \
+            test_utils.create_event(
+                GV.jobs_ids[GV.idx], GV.cf_names, GV.times[GV.idx],
+                events.EventType.TABLE_FILE_CREATION, cf_name,
+                file_number=GV.file_numbers[GV.idx],
+                file_size=total_uncompressed_size_bytes,
+                table_properties=table_props)
+        GV.idx += 1
+
+        return creation_event
+
+    def get_creation_event_compressed(
+            cf_name, total_compressed_size_bytes,
+            total_uncompressed_size_bytes,
+            compression_type):
+        assert compression_type != utils.NO_COMPRESSION
+
+        table_props = get_table_properties(total_uncompressed_size_bytes,
+                                           compression_type)
+        creation_event = \
+            test_utils.create_event(
+                GV.jobs_ids[GV.idx], GV.cf_names, GV.times[GV.idx],
+                events.EventType.TABLE_FILE_CREATION, cf_name,
+                file_number=GV.file_numbers[GV.idx],
+                file_size=total_compressed_size_bytes,
+                table_properties=table_props)
+        GV.idx += 1
+
+        return creation_event
+
+    # Test Func
+    get_info = calc_utils.get_files_compression_info
+
+    monitor = db_files.DbFilesMonitor()
+    assert get_info(monitor) == {}
+
+    # Using Snappy
+    compression_snappy = "Snappy"
+
+    uncompressed_file_size1 = 1000
+    compressed_file_size1 = 700
+    uncompressed_file_size2 = 2000
+    compressed_file_size2 = 1500
+
+    total_snappy_compressed_size = \
+        compressed_file_size1 + compressed_file_size2
+    total_snappy_uncompressed_size = \
+        uncompressed_file_size1 + uncompressed_file_size2
+
+    # Using ZSTD
+    compression_zstd = "ZSTD"
+    uncompressed_file_size3 = 3000
+    compressed_file_size3 = 2200
+
+    file1_uncompressed_creation_event = \
+        get_creation_event_uncompressed(GV.cf1, uncompressed_file_size1)
+    monitor.new_event(file1_uncompressed_creation_event)
+    assert get_info(monitor) == {}
+
+    file2_compressed_creation_event = \
+        get_creation_event_compressed(
+            GV.cf1, compressed_file_size1, uncompressed_file_size1,
+            compression_snappy)
+    monitor.new_event(file2_compressed_creation_event)
+    expected_info = \
+        {compression_snappy:
+            calc_utils.DbFilesCompressionTypeInfo(
+                num_files=1,
+                total_compressed_size_bytes=compressed_file_size1,
+                total_uncompressed_size_bytes=uncompressed_file_size1)}
+    assert expected_info == get_info(monitor)
+
+    file3_compressed_creation_event = \
+        get_creation_event_compressed(
+            GV.cf2, compressed_file_size2, uncompressed_file_size2,
+            compression_snappy)
+    monitor.new_event(file3_compressed_creation_event)
+    expected_info = \
+        {compression_snappy:
+            calc_utils.DbFilesCompressionTypeInfo(
+                num_files=2,
+                total_compressed_size_bytes=total_snappy_compressed_size,
+                total_uncompressed_size_bytes=total_snappy_uncompressed_size)}
+    assert expected_info == get_info(monitor)
+
+    file4_compressed_creation_event = \
+        get_creation_event_compressed(
+            GV.cf2, compressed_file_size3, uncompressed_file_size3,
+            compression_zstd)
+    monitor.new_event(file4_compressed_creation_event)
+    expected_info = \
+        {compression_snappy:
+            calc_utils.DbFilesCompressionTypeInfo(
+                num_files=2,
+                total_compressed_size_bytes=total_snappy_compressed_size,
+                total_uncompressed_size_bytes=total_snappy_uncompressed_size),
+            compression_zstd:
+                calc_utils.DbFilesCompressionTypeInfo(
+                    num_files=1,
+                    total_compressed_size_bytes=compressed_file_size3,
+                    total_uncompressed_size_bytes=uncompressed_file_size3)}
+    assert expected_info == get_info(monitor)

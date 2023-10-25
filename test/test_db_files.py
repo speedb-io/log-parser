@@ -29,7 +29,7 @@ def test_create_delete_file():
     creation_event1 = \
         test_utils.create_event(
             job_id1, cf_names, time1, events.EventType.TABLE_FILE_CREATION,
-            cf1, file_number=file_number1,
+            cf1, file_number=file_number1, file_size=0,
             table_properties=test_utils.get_table_properties(table_vars))
 
     monitor = db_files.DbFilesMonitor()
@@ -46,7 +46,8 @@ def test_create_delete_file():
             creation_time=time1,
             deletion_time=None,
             compressed_file_size_bytes=0,
-            compressed_data_size_bytes=0,
+            compressed_data_size_bytes=test_utils.TablePropertiesTestVars.
+            compressed_data_size_bytes,
             data_size_bytes=expected_data_size_bytes,
             index_size_bytes=table_vars.index_size_bytes,
             filter_size_bytes=table_vars.filter_size_bytes,

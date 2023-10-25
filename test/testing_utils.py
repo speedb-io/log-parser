@@ -149,7 +149,7 @@ def get_table_properties(table_properties_test_vars):
     assert isinstance(table_properties_test_vars, TablePropertiesTestVars)
 
     return {
-        "compressed_data_size":
+        "data_size":
             table_properties_test_vars.compressed_data_size_bytes,
         "index_size": table_properties_test_vars.index_size_bytes,
         "index_partitions": 0,
