@@ -875,6 +875,36 @@ def prepare_live_files_info_for_display(live_files_info):
     return disp
 
 
+def prepare_files_compression_info_for_display(files_compression_info):
+    if not files_compression_info:
+        return "No Compressed Files Info"
+
+    disp = {}
+
+    for compression_type, compression_info in files_compression_info.items():
+        assert isinstance(compression_info,
+                          calc_utils.DbFilesCompressionTypeInfo)
+
+        compression_ratio =\
+            compression_info.total_compressed_size_bytes /\
+            compression_info.total_uncompressed_size_bytes * 100
+        disp_compressed_size_bytes = \
+            num_bytes_for_display(
+                compression_info.total_compressed_size_bytes)
+        disp_uncompressed_size_bytes = \
+            num_bytes_for_display(
+                compression_info.total_uncompressed_size_bytes)
+
+        disp[compression_type] = {
+            "Num Compressed Files": compression_info.num_files,
+            "Compression Ratio":
+                f"{compression_ratio:.1f}% "
+                f"({disp_compressed_size_bytes} / "
+                f"{disp_uncompressed_size_bytes})"}
+
+    return disp
+
+
 def prepare_seek_stats_for_display(seek_stats):
     assert isinstance(seek_stats, calc_utils.SeekStats)
 

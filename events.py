@@ -57,8 +57,6 @@ class EventField(str, Enum):
     CF_NAME = "cf_name"
     FLUSH_REASON = "flush_reason"
     COMPACTION_REASON = "compaction_reason"
-    FILE_NUMBER = "file_number"
-    FILE_SIZE = "file_size"
     TABLE_PROPERTIES = "table_properties"
     WAL_ID = "wal_id",
     NUM_ENTRIES = "num_entries"
@@ -68,8 +66,12 @@ class EventField(str, Enum):
     INPUT_DATA_SIZE = "input_data_size"
     COMPACTION_TIME_MICROS = "compaction_time_micros"
     TOTAL_OUTPUT_SIZE = "total_output_size"
-    # Table Creation
+
+    # Table Creation / Deletion
+    FILE_NUMBER = "file_number"
+    FILE_SIZE = "file_size"
     OLDEST_BLOB_FILE_NUM = "oldest_blob_file_number"
+
     # Compaction Finished
     OUTPUT_LEVEL = "output_level"
     NUM_OUTPUT_FILES = "num_output_files"
@@ -668,6 +670,11 @@ class TableFileCreationEvent(Event):
     def get_compressed_file_size_bytes(self, default=0):
         return self.get_event_data_field1(EventField.FILE_SIZE, default)
 
+    def get_estimated_file_size_bytes(self, default=0):
+        return self.get_data_size_bytes(default) + \
+               self.get_index_size_bytes() + \
+               self.get_filter_size_bytes(default)
+
     def get_compressed_data_size_bytes(self, default=0):
         return self.get_table_properties_field(
             TablePropertiesField.DATA_SIZE, default)
@@ -723,7 +730,8 @@ class TableFileCreationEvent(Event):
         return compression_type
 
     def is_compressed(self):
-        return self.get_compression_type() == utils.NO_COMPRESSION
+        return self.get_compression_type() and \
+               self.get_compression_type() != utils.NO_COMPRESSION
 
     def get_table_properties(self):
         return self.get_event_data_field1(EventField.TABLE_PROPERTIES)

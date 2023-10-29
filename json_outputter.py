@@ -42,6 +42,7 @@ def get_db_size_json(parsed_log):
     stats_mngr = parsed_log.get_stats_mngr()
     db_wide_stats_mngr = stats_mngr.get_db_wide_stats_mngr()
     compactions_stats_mngr = stats_mngr.get_compactions_stats_mngr()
+    files_monitor = parsed_log.get_files_monitor()
 
     db_size_json = {}
 
@@ -54,13 +55,23 @@ def get_db_size_json(parsed_log):
         db_size_json["Ingest"] = utils.DATA_UNAVAILABLE_TEXT
 
     live_files_info = \
-        calc_utils.get_live_files_info(parsed_log.get_files_monitor())
+        calc_utils.get_live_files_info(files_monitor)
     if live_files_info:
         live_files_json = \
             display_utils.prepare_live_files_info_for_display(live_files_info)
         db_size_json["Live Files"] = live_files_json
     else:
         db_size_json["Live Files"] = utils.DATA_UNAVAILABLE_TEXT
+
+    files_compression_info = \
+        calc_utils.get_files_compression_info(files_monitor)
+    if files_compression_info:
+        files_compression_json = \
+            display_utils.\
+            prepare_files_compression_info_for_display(files_compression_info)
+        db_size_json["Files Compression"] = files_compression_json
+    else:
+        db_size_json["Files Compression"] = utils.DATA_UNAVAILABLE_TEXT
 
     cfs_growth_info = \
         calc_utils.calc_cfs_growth_info(cfs_names,

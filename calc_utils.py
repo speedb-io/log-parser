@@ -20,9 +20,8 @@ from dataclasses import dataclass, field
 import db_files
 import db_options
 import utils
+import events
 from counters import CountersMngr
-from events import EventType
-from events import FlowType, MatchingEventInfo, EventsMngr
 from log_file import ParsedLog
 from stats_mngr import CompactionStatsMngr, CfFileHistogramStatsMngr, \
     DbWideStatsMngr
@@ -216,11 +215,11 @@ def calc_total_growth_info(cfs_growth_info):
 
 
 def calc_cf_table_creation_stats(cf_name, events_mngr):
-    assert isinstance(events_mngr, EventsMngr)
+    assert isinstance(events_mngr, events.EventsMngr)
 
     creation_events = \
         events_mngr.get_cf_events_by_type(cf_name,
-                                          EventType.TABLE_FILE_CREATION)
+                                          events.EventType.TABLE_FILE_CREATION)
 
     total_num_entries = 0
     total_keys_sizes = 0
@@ -260,7 +259,8 @@ class DeleteOpersStats:
 
 def calc_cf_delete_opers_stats(cf_name, events_mngr):
     flush_started_events = \
-        events_mngr.get_cf_events_by_type(cf_name, EventType.FLUSH_STARTED)
+        events_mngr.get_cf_events_by_type(cf_name,
+                                          events.EventType.FLUSH_STARTED)
 
     if not flush_started_events:
         return DeleteOpersStats(
@@ -277,7 +277,7 @@ def calc_cf_delete_opers_stats(cf_name, events_mngr):
 
 def calc_delete_opers_stats(cfs_names, events_mngr):
     assert cfs_names
-    assert isinstance(events_mngr, EventsMngr)
+    assert isinstance(events_mngr, events.EventsMngr)
 
     stats = DeleteOpersStats(total_num_flushed_entries=0, total_num_deletes=0)
 
@@ -532,6 +532,47 @@ def get_live_files_info(db_files_monitor):
         total_filter_size_bytes=total_filter_size_bytes)
 
 
+@dataclass
+class DbFilesCompressionTypeInfo:
+    num_files: int = 0
+    total_compressed_size_bytes: int = 0
+    total_uncompressed_size_bytes: int = 0
+
+
+def get_files_compression_info(db_files_monitor):
+    assert isinstance(db_files_monitor, db_files.DbFilesMonitor)
+
+    files = db_files_monitor.get_all_files_flat()
+
+    info = dict()
+
+    for file_number, file_info in files.items():
+        # Skipping files that were only deleted
+        if file_info.was_deleted_without_creation():
+            continue
+
+        creation_event = file_info.creation_event
+        assert isinstance(creation_event, events.TableFileCreationEvent)
+
+        # Only compressed files are applicable
+        if not creation_event.is_compressed():
+            continue
+
+        compression_type = creation_event.get_compression_type()
+        assert compression_type != utils.NO_COMPRESSION
+
+        if compression_type not in info:
+            info[compression_type] = DbFilesCompressionTypeInfo()
+
+        info[compression_type].num_files += 1
+        info[compression_type].total_compressed_size_bytes += \
+            creation_event.get_compressed_file_size_bytes()
+        info[compression_type].total_uncompressed_size_bytes += \
+            creation_event.get_estimated_file_size_bytes()
+
+    return info
+
+
 def calc_event_histogram(cf_name, events_mngr, event_type, group_by_field):
     events = events_mngr.get_cf_events_by_type(cf_name, event_type)
 
@@ -569,7 +610,7 @@ class PerFlushReasonStats:
 
 
 def calc_cf_flushes_stats(cf_name, events_mngr):
-    cf_flush_events = events_mngr.get_cf_flow_events(FlowType.FLUSH,
+    cf_flush_events = events_mngr.get_cf_flow_events(events.FlowType.FLUSH,
                                                      cf_name)
     if not cf_flush_events:
         return {}
@@ -592,10 +633,12 @@ def calc_cf_flushes_stats(cf_name, events_mngr):
         # It's possible that there is no matching end event
         end_event = events_pair[1]
         if end_event:
-            start_event_info = MatchingEventInfo(start_flush_event,
-                                                 FlowType.FLUSH, True)
-            end_event_info = MatchingEventInfo(end_event,
-                                               FlowType.FLUSH, False)
+            start_event_info = \
+                events.MatchingEventInfo(
+                    start_flush_event, events.FlowType.FLUSH, True)
+            end_event_info = \
+                events.MatchingEventInfo(
+                    end_event, events.FlowType.FLUSH, False)
             flush_duration_ms = \
                 start_event_info.get_duration_ms(end_event_info)
 
@@ -718,7 +761,7 @@ def calc_all_events_histogram(cf_names, events_mngr):
     histogram = {}
 
     for cf_name in cf_names:
-        for event_type in EventType:
+        for event_type in events.EventType:
             cf_events_of_type = events_mngr.get_cf_events_by_type(cf_name,
                                                                   event_type)
             if cf_name not in histogram:
