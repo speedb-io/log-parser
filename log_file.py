@@ -443,7 +443,7 @@ class ParsedLog:
         if not cfs_names:
             return
         for cf_name in cfs_names:
-            self.cfs_metadata.handle_cf_name_found_during_parsing(
+            self.cfs_metadatahandle_cf_name_found_during_parsing(
                 cf_name, entry)
 
     def parse_rest_of_log(self):
