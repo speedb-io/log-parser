@@ -630,7 +630,10 @@ class CfNoFileStatsMngr:
             count = int(match[1])
             self.stall_counts[cf_name][time][match[2]] = count
             sum_fields_count += count
-        assert self.stall_counts[cf_name][time]
+        if not self.stall_counts[cf_name][time]:
+            raise utils.ParsingError(
+                f"Failed parsing stall counts line. "
+                f"cf:{cf_name}, time:{time}, line:{line}\n")
 
         total_count_match = re.findall(
             regexes.CF_STALLS_INTERVAL_COUNT, line)
