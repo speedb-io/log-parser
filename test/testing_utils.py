@@ -46,6 +46,19 @@ def line_to_entry(line, last_line=True):
     return LogEntry(0, line, last_line)
 
 
+def lines_to_entry(lines):
+    assert isinstance(lines, list)
+    assert len(lines) > 0
+    assert LogEntry.is_entry_start(lines[0])
+
+    entry = LogEntry(0, lines[0], False)
+    for line in lines[1:]:
+        entry.add_line(line, False)
+    entry.all_lines_added()
+
+    return entry
+
+
 def lines_to_entries(lines):
     entries = []
     entry = None

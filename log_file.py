@@ -28,6 +28,7 @@ from log_entry import LogEntry
 from log_file_options_parser import LogFileOptionsParser
 from stats_mngr import StatsMngr
 from warnings_mngr import WarningsMngr
+from mem_rep_parser import MemRepParser
 
 get_error_context = utils.get_error_context_from_entry
 
@@ -177,6 +178,7 @@ class ParsedLog:
         self.warnings_mngr = WarningsMngr()
         self.stats_mngr = StatsMngr()
         self.counters_mngr = CountersMngr()
+        self.mem_rep_mngr = MemRepParser()
         self.not_parsed_entries = []
 
         self.parse_metadata()
@@ -425,6 +427,13 @@ class ParsedLog:
 
         return result
 
+    def try_parse_as_mem_rep_entries(self):
+        result, self.entry_idx = \
+            self.mem_rep_mngr.try_adding_entries(
+                self.log_entries, self.entry_idx)
+
+        return result
+
     def try_processing_in_monitors(self):
         curr_entry = self.get_curr_entry()
         processed, cf_name = \
@@ -471,6 +480,9 @@ class ParsedLog:
                         continue
 
                     if self.try_parse_as_counters_stats_entries():
+                        continue
+
+                    if self.try_parse_as_mem_rep_entries():
                         continue
 
                     if not self.try_processing_in_monitors():
@@ -566,6 +578,9 @@ class ParsedLog:
 
     def get_warnings_mngr(self):
         return self.warnings_mngr
+
+    def get_mem_rep_mngr(self):
+        return self.mem_rep_mngr
 
     def get_entry(self, entry_idx):
         return self.log_entries[entry_idx]
