@@ -72,6 +72,7 @@ NO_COMPACTIONS_TEXT = "No Compactions"
 NO_BLOCK_CACHE_STATS = "No Block Cache Statistics"
 NO_GROWTH_INFO_TEXT = "No Growth Information Available"
 NO_COMPRESSION = "NoCompression"
+NO_MEM_REPS = "No Memory Reports"
 
 # =====================================
 #           MISC UTILS
@@ -106,10 +107,16 @@ def get_last_dict_entry_components(d):
 
 
 def delete_dict_keys(in_dict, keys_to_delete):
-    """ Delete specific keys from an dictionary"""
+    """ Delete specific keys from n dictionary"""
     for key in keys_to_delete:
         if key in in_dict:
             del in_dict[key]
+
+
+def delete_dict_keys_matching_value(in_dict, matching_value):
+    """ Delete all keys whose value == matching_value from a dictionary"""
+    return {key: value for key, value in in_dict.items()
+            if value != matching_value}
 
 
 def unify_dicts(dict1, dict2, favor_first):
@@ -572,7 +579,13 @@ def get_num_leading_spaces(line):
 
 
 def remove_empty_lines_at_start(lines):
-    return [line for line in lines if line.strip()]
+    assert isinstance(lines, list)
+
+    i = 0
+    while i < len(lines) and not lines[i]:
+        i += 1
+
+    return copy.deepcopy(lines[i:])
 
 
 def try_find_cfs_in_lines(cfs_names, lines):

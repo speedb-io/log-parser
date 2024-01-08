@@ -1189,3 +1189,30 @@ def prepare_applicable_read_stats(
             cfs_names, db_opts, counters_mngr, files_monitor)
 
     return stats if stats else None
+
+
+def prepare_mem_reps_for_display(mem_reps):
+    assert isinstance(mem_reps, dict)
+
+    disp = dict()
+    for time, rep in mem_reps.items():
+        # Remove all arena entities that do not use any memory
+        arena_stats = \
+            utils.delete_dict_keys_matching_value(rep.arena_stats, "0")
+        disp_arena_stats = {
+            "Total": rep.arena_total,
+            "Entities": arena_stats
+        }
+
+        disp_cfs_stats = {
+            "Total": rep.cfs_total,
+            "CF-s": rep.cfs_stats
+        }
+
+        disp[time] = {
+            "Arena": disp_arena_stats,
+            "CF-s": disp_cfs_stats,
+            "Misc": rep.misc_stats
+        }
+
+    return disp

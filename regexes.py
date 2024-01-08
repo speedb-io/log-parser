@@ -107,6 +107,18 @@ DUMP_STATS_STR = r'------- DUMPING STATS -------'
 DB_STATS = fr'^{WS}\*\* DB Stats \*\*{WS}$'
 COMPACTION_STATS = fr'^{WS}\*\* Compaction Stats{WS}{CF_NAME}{WS}\*\*{WS}$'
 
+#
+# MEMORY REPORTING
+#
+MEM_REP_USAGE = r"(?P<usage>.*)"
+MEM_REP_TITLE = fr"^{WS}\*\* Memory Reporting \*\*{WS}$"
+MEM_REP_ARENA_STATS_TITLE = "Arena Stats:"
+MEM_REP_CFS_STATS_TITLE = "CF Stats:"
+MEM_REP_TOTAL_LINE = fr"Total: {MEM_REP_USAGE}"
+MEM_REP_CF_USAGE_LINE = fr"{CF_NAME}: {MEM_REP_USAGE}$"
+MEM_REP_ENTITY_USAGE_LINE = fr"(?P<entity>.*?): {MEM_REP_USAGE}$"
+
+
 FILE_READ_LATENCY_STATS = \
     fr'^{WS}\*\* File Read Latency Histogram By Level{WS}{CF_NAME}' \
     fr'{WS}\*\*{WS}$'

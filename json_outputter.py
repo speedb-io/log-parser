@@ -216,6 +216,18 @@ def get_block_cache_json(parsed_log):
         return utils.NO_BLOCK_CACHE_STATS
 
 
+def get_mem_rep_json(parsed_log):
+    mem_rep_mngr = parsed_log.get_mem_rep_mngr()
+    mem_reps = mem_rep_mngr.get_reports()
+
+    if mem_reps:
+        display_reports = \
+            display_utils.prepare_mem_reps_for_display(mem_reps)
+        return display_reports
+    else:
+        return utils.NO_MEM_REPS
+
+
 def get_json(parsed_log):
     j = dict()
 
@@ -237,6 +249,7 @@ def get_json(parsed_log):
     j["Seeks"] = get_seeks_json(parsed_log)
     j["Warnings"] = get_warnings_json(parsed_log)
     j["Block-Cache-Stats"] = get_block_cache_json(parsed_log)
+    j["Memory-Reporting"] = get_mem_rep_json(parsed_log)
 
     return j
 
