@@ -18,7 +18,8 @@ import utils
 from stats_mngr import DbWideStatsMngr, CompactionStatsMngr, BlobStatsMngr, \
     CfFileHistogramStatsMngr, BlockCacheStatsMngr, \
     StatsMngr, parse_uptime_line, CfNoFileStatsMngr
-from test.testing_utils import lines_to_entries
+import test.testing_utils as test_utils
+
 
 NUM_LINES = 381
 STATS_DUMP_IDX = 0
@@ -252,6 +253,65 @@ def test_find_next_start_line_in_db_stats():
         stats_type = next_stats_type
 
 
+def test_find_next_start_line_in_cf_stats():
+    lines = '''
+    2024/01/09-06:06:05.828535 31202 [/db_impl/db_impl.cc:1172] CF Stats [column_family_name_000001]
+    ** Compaction Stats [column_family_name_000001] **
+    Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+    ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+     Sum      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0       0.0       0.0
+     Int      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0       0.0       0.0
+    
+    ** Compaction Stats [column_family_name_000001] **
+    Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+    ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    
+    Blob file count: 0, total size: 0.0 GB, garbage size: 0.0 GB, space amp: 0.0
+    
+    Uptime(secs): 4.0 total, 4.0 interval
+    Flush(GB): cumulative 0.000, interval 0.000
+    AddFile(GB): cumulative 0.000, interval 0.000
+    AddFile(Total Files): cumulative 0, interval 0
+    AddFile(L0 Files): cumulative 0, interval 0
+    AddFile(Keys): cumulative 0, interval 0
+    Cumulative compaction: 0.00 GB write, 0.00 MB/s write, 0.00 GB read, 0.00 MB/s read, 0.0 seconds
+    Interval compaction: 0.00 GB write, 0.00 MB/s write, 0.00 GB read, 0.00 MB/s read, 0.0 seconds
+    Write Stall (count): cf-l0-file-count-limit-delays-with-ongoing-compaction: 0, cf-l0-file-count-limit-stops-with-ongoing-compaction: 0, l0-file-count-limit-delays: 0, l0-file-count-limit-stops: 0, memtable-limit-delays: 0, memtable-limit-stops: 0, pending-compaction-bytes-delays: 0, pending-compaction-bytes-stops: 0, total-delays: 0, total-stops: 0
+    
+    Block cache LRUCache@0x5632f8b263d0#31137 capacity: 32.00 MB seed: 1856652305 usage: 0.09 KB table_size: 1024 occupancy: 1 collections: 1 last_copies: 19 last_secs: 0.000296 secs_since: 4
+    Block cache entry stats(count,size,portion): Misc(1,0.00 KB,0%)
+    Block cache [column_family_name_000001]  DataBlock(0.00 KB) FilterBlock(0.00 KB) IndexBlock(0.00 KB)
+    
+    ** File Read Latency Histogram By Level [column_family_name_000001] **
+    '''.splitlines() # noqa
+
+    expected_next_line_idxs = [2, 8, 12, 14, 24, 28]
+    expected_next_types = [StatsMngr.StatsType.COMPACTION,
+                           StatsMngr.StatsType.COMPACTION,
+                           StatsMngr.StatsType.BLOB,
+                           StatsMngr.StatsType.CF_NO_FILE,
+                           StatsMngr.StatsType.BLOCK_CACHE,
+                           StatsMngr.StatsType.CF_FILE_HISTOGRAM]
+
+    cf_name = "column_family_name_000001"
+    expected_next_cf_names = [cf_name, cf_name, None, None, None, cf_name]
+
+    line_idx = 0
+    stats_type = None
+    for i, expected_next_line_idx in enumerate(expected_next_line_idxs):
+        next_line_idx, next_stats_type, next_cf_name = \
+            StatsMngr.find_next_start_line_in_db_stats(lines,
+                                                       line_idx,
+                                                       stats_type)
+        assert (next_line_idx > line_idx) or (next_stats_type is None)
+        assert next_line_idx == expected_next_line_idx
+        assert next_stats_type == expected_next_types[i]
+        assert next_cf_name == expected_next_cf_names[i]
+
+        line_idx = next_line_idx
+        stats_type = next_stats_type
+
+
 def test_blob_stats_mngr():
     blob_line = \
         'Blob file count: 10, total size: 1.5 GB, garbage size: 2.0 GB, ' \
@@ -347,7 +407,7 @@ def test_block_cache_stats_mngr_with_cf():
 
 def test_stats_mngr():
     lines = read_sample_stats_file()
-    entries = lines_to_entries(lines)
+    entries = test_utils.lines_to_entries(lines)
 
     mngr = StatsMngr()
 
@@ -387,7 +447,7 @@ Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Mov
  Int      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.1      0.1       0.2   1.0      0.0    594.4      0.12              0.00         1    0.120       0      0       0.0       0.0
 '''.splitlines() # noqa
 
-    entries = lines_to_entries(lines)
+    entries = test_utils.lines_to_entries(lines)
 
     mngr = StatsMngr()
 
@@ -433,7 +493,7 @@ Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Mov
  Int      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.1      0.1       0.2   1.0      0.0    594.4      0.12              0.00         1    0.120       0      0       0.0       0.0
 '''.splitlines() # noqa
 
-    entries = lines_to_entries(lines)
+    entries = test_utils.lines_to_entries(lines)
 
     mngr = StatsMngr()
 
@@ -1042,10 +1102,130 @@ Stalls(count): 0 level0_slowdown, 0 level0_slowdown_with_compaction, 0 level0_nu
  """ # noqa
 stats_dump = stats_dump.splitlines()
 stats_dump = [line.strip() for line in stats_dump]
-stats_dump_entries = lines_to_entries(stats_dump)
+stats_dump_entries = test_utils.lines_to_entries(stats_dump)
 
 
 def test_stats_mngr_parsing_ignoring_repeating_cfs():
     mngr = StatsMngr()
     assert mngr.is_dump_stats_start(stats_dump_entries[0])
     mngr.try_adding_entries(stats_dump_entries, 0)
+
+
+def test_is_cf_stats_entry():
+    lines1 = '''
+    2024/01/09-06:06:05.828522 31202 [/db_impl/db_impl.cc:1172] CF Stats [default]
+    ** Compaction Stats [default] **'''.splitlines() # noqa
+    entry1 = \
+        test_utils.lines_to_entry(utils.remove_empty_lines_at_start(lines1))
+
+    lines2 = '''
+    2024/01/09-06:06:05.828522 31202 [/db_impl/db_impl.cc:1172] CF [default]
+    ** Compaction Stats [default] **'''.splitlines() # noqa
+    entry2 = \
+        test_utils.lines_to_entry(utils.remove_empty_lines_at_start(lines2))
+
+    assert StatsMngr.is_cf_stats_entry(entry1)
+    assert not StatsMngr.is_cf_stats_entry(entry2)
+
+
+def test_parse_cf_stats_entry():
+    lines =\
+        '''2024/01/09-06:06:05.828522 31202 [/db_impl/db_impl.cc:1172] CF Stats [default]
+        ** Compaction Stats [default] **
+        Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+        ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+         Sum      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0       0.0       0.0
+         Int      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0       0.0       0.0
+        
+        ** Compaction Stats [default] **
+        Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+        ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+        
+        Blob file count: 0, total size: 0.0 GB, garbage size: 0.0 GB, space amp: 0.0
+        
+        Uptime(secs): 4.1 total, 4.1 interval
+        Flush(GB): cumulative 0.000, interval 0.000
+        AddFile(GB): cumulative 0.000, interval 0.000
+        AddFile(Total Files): cumulative 0, interval 0
+        AddFile(L0 Files): cumulative 0, interval 0
+        AddFile(Keys): cumulative 0, interval 0
+        Cumulative compaction: 0.00 GB write, 0.00 MB/s write, 0.00 GB read, 0.00 MB/s read, 0.0 seconds
+        Interval compaction: 0.00 GB write, 0.00 MB/s write, 0.00 GB read, 0.00 MB/s read, 0.0 seconds
+        Write Stall (count): cf-l0-file-count-limit-delays-with-ongoing-compaction: 0, cf-l0-file-count-limit-stops-with-ongoing-compaction: 0, l0-file-count-limit-delays: 0, l0-file-count-limit-stops: 0, memtable-limit-delays: 0, memtable-limit-stops: 0, pending-compaction-bytes-delays: 0, pending-compaction-bytes-stops: 0, total-delays: 0, total-stops: 0
+        
+        Block cache LRUCache@0x5632f8b263d0#31137 capacity: 32.00 MB seed: 1856652305 usage: 0.09 KB table_size: 1024 occupancy: 1 collections: 1 last_copies: 19 last_secs: 0.000296 secs_since: 4
+        Block cache entry stats(count,size,portion): Misc(1,0.00 KB,0%)
+        Block cache [default]  DataBlock(0.00 KB) FilterBlock(0.00 KB) IndexBlock(0.00 KB)
+        
+        ** File Read Latency Histogram By Level [default] **
+        '''.splitlines() # noqa
+
+    entry = test_utils.lines_to_entry(utils.remove_empty_lines_at_start(lines))
+
+    mngr = StatsMngr()
+
+    assert mngr.is_cf_stats_entry(entry)
+    assert mngr.try_adding_cf_stats_entry(entry) == (True, "default")
+
+
+def test_parse_db_wise_and_cf_stats_entry():
+    db_wide_lines =\
+        '''2024/01/09-06:06:05.828486 31202 [/db_impl/db_impl.cc:1168] ------- DUMPING STATS -------
+        2024/01/09-06:06:05.828508 31202 [/db_impl/db_impl.cc:1170] 
+        ** DB Stats **
+        Uptime(secs): 4.1 total, 4.1 interval
+        Cumulative writes: 145K writes, 145K keys, 145K commit groups, 1.0 writes per commit group, ingest: 0.02 GB, 4.42 MB/s
+        Cumulative WAL: 145K writes, 0 syncs, 145257.00 writes per sync, written: 0.02 GB, 4.42 MB/s
+        Cumulative stall: 00:00:0.000 H:M:S, 0.0 percent
+        Interval writes: 145K writes, 145K keys, 145K commit groups, 1.0 writes per commit group, ingest: 18.27 MB, 4.42 MB/s
+        Interval WAL: 145K writes, 0 syncs, 145257.00 writes per sync, written: 0.02 GB, 4.42 MB/s
+        Interval stall: 00:00:0.000 H:M:S, 0.0 percent
+        Write Stall (count): write-buffer-manager-limit-stops: 0
+        '''.splitlines() # noqa
+
+    cf_stats_lines =\
+        '''2024/01/09-06:06:05.828522 31202 [/db_impl/db_impl.cc:1172] CF Stats [default]
+        ** Compaction Stats [default] **
+        Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+        ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+         Sum      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0       0.0       0.0
+         Int      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0       0.0       0.0
+
+        ** Compaction Stats [default] **
+        Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+        ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+        Blob file count: 0, total size: 0.0 GB, garbage size: 0.0 GB, space amp: 0.0
+
+        Uptime(secs): 4.1 total, 4.1 interval
+        Flush(GB): cumulative 0.000, interval 0.000
+        AddFile(GB): cumulative 0.000, interval 0.000
+        AddFile(Total Files): cumulative 0, interval 0
+        AddFile(L0 Files): cumulative 0, interval 0
+        AddFile(Keys): cumulative 0, interval 0
+        Cumulative compaction: 0.00 GB write, 0.00 MB/s write, 0.00 GB read, 0.00 MB/s read, 0.0 seconds
+        Interval compaction: 0.00 GB write, 0.00 MB/s write, 0.00 GB read, 0.00 MB/s read, 0.0 seconds
+        Write Stall (count): cf-l0-file-count-limit-delays-with-ongoing-compaction: 0, cf-l0-file-count-limit-stops-with-ongoing-compaction: 0, l0-file-count-limit-delays: 0, l0-file-count-limit-stops: 0, memtable-limit-delays: 0, memtable-limit-stops: 0, pending-compaction-bytes-delays: 0, pending-compaction-bytes-stops: 0, total-delays: 0, total-stops: 0
+
+        Block cache LRUCache@0x5632f8b263d0#31137 capacity: 32.00 MB seed: 1856652305 usage: 0.09 KB table_size: 1024 occupancy: 1 collections: 1 last_copies: 19 last_secs: 0.000296 secs_since: 4
+        Block cache entry stats(count,size,portion): Misc(1,0.00 KB,0%)
+        Block cache [default]  DataBlock(0.00 KB) FilterBlock(0.00 KB) IndexBlock(0.00 KB)
+
+        ** File Read Latency Histogram By Level [default] **
+        '''.splitlines()  # noqa
+
+    db_wide_entries =\
+        test_utils.lines_to_entries(utils.remove_empty_lines_at_start(
+            db_wide_lines))
+    cf_stats_entry =\
+        test_utils.lines_to_entry(utils.remove_empty_lines_at_start(
+            cf_stats_lines))
+
+    mngr = StatsMngr()
+
+    assert mngr.is_dump_stats_start(db_wide_entries[0])
+    assert mngr.try_adding_entries(db_wide_entries, 0) == (True, 2, set())
+
+    assert mngr.is_cf_stats_entry(cf_stats_entry)
+    assert mngr.try_adding_entries([cf_stats_entry], 0) == (True, 1,
+                                                            {"default"})

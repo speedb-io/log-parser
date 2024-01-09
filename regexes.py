@@ -105,6 +105,7 @@ WRITE_STOP_WARN_MSG = fr"{CF_NAME_OLD}{WS}Stopping writes"
 #
 DUMP_STATS_STR = r'------- DUMPING STATS -------'
 DB_STATS = fr'^{WS}\*\* DB Stats \*\*{WS}$'
+CF_STATS = fr'^{WS}CF Stats{WS}{CF_NAME}{WS}$'
 COMPACTION_STATS = fr'^{WS}\*\* Compaction Stats{WS}{CF_NAME}{WS}\*\*{WS}$'
 
 #
