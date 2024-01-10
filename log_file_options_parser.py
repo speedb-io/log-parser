@@ -25,7 +25,8 @@ format_line_num_from_entry = utils.format_line_num_from_entry
 
 
 TABLE_OPTIONS_TOPIC_TITLES = [("metadata_cache_options", "metadata_cache_"),
-                              ("block_cache_options", "block_cache_")]
+                              ("block_cache_options", "block_cache_"),
+                              ("pinning_policy_options", "pinning_policy_")]
 
 
 def get_table_options_topic_info(topic_name):

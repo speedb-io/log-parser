@@ -25,6 +25,10 @@ def test_get_table_options_topic_info():
     assert get_table_options_topic_info(
         "block_cache_options") == ("block_cache_options", "block_cache_")
 
+    assert get_table_options_topic_info(
+        "pinning_policy_options") == ("pinning_policy_options",
+                                      "pinning_policy_")
+
     assert get_table_options_topic_info("block_cache") is None
 
 
