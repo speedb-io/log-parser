@@ -1004,6 +1004,7 @@ class BlockCacheStatsMngr:
 class StatsMngr:
     class StatsType(Enum):
         DB_WIDE = auto()
+        CF_STATS = auto()
         COMPACTION = auto()
         BLOB = auto()
         BLOCK_CACHE = auto()
@@ -1023,6 +1024,14 @@ class StatsMngr:
     @staticmethod
     def is_dump_stats_start(entry):
         return entry.get_msg().startswith(regexes.DUMP_STATS_STR)
+
+    @staticmethod
+    def try_parse_cf_stats_line(line):
+        return re.fullmatch(regexes.CF_STATS, line)
+
+    @staticmethod
+    def is_cf_stats_entry(entry):
+        return StatsMngr.try_parse_cf_stats_line(entry.get_msg_lines()[0])
 
     @staticmethod
     def find_next_start_line_in_db_stats(db_stats_lines,
@@ -1063,12 +1072,15 @@ class StatsMngr:
 
         line_num = entry_start_line_num + start_line_idx + 1
         try:
-            logging.debug(f"Parsing Stats Component ({stats_type.name}) "
-                          f"[line# {line_num}]")
+            if stats_type != StatsMngr.StatsType.CF_STATS:
+                logging.debug(f"Parsing Stats Component ({stats_type.name}) "
+                              f"[line# {line_num}]")
 
             valid_stats_type = True
             if stats_type == StatsMngr.StatsType.DB_WIDE:
                 self.db_wide_stats_mngr.add_lines(time, stats_lines_to_parse)
+            elif stats_type == StatsMngr.StatsType.CF_STATS:
+                return
             elif stats_type == StatsMngr.StatsType.COMPACTION:
                 self.compaction_stats_mngr.add_lines(
                     time, cf_name, stats_lines_to_parse, line_num)
@@ -1103,7 +1115,15 @@ class StatsMngr:
         cf_names_found = set()
         entry_idx = start_entry_idx
 
-        # A stats entry starts with the
+        result, cf_name =\
+            self.try_adding_cf_stats_entry(log_entries[entry_idx])
+        if result:
+            assert cf_name is not None
+            cf_names_found.add(cf_name)
+            entry_idx += 1
+            return True, entry_idx, cf_names_found
+
+        # stats entry starts with the
         # "------- DUMPING STATS -------" entry, however, there may be
         # unrelated entries between this entry and the entry with
         # the actual stats (the one starting with "DB Stats").
@@ -1128,7 +1148,7 @@ class StatsMngr:
         # for a later entry with the actual stats
         if len(db_stats_lines) == 0 or \
                 not DbWideStatsMngr.is_start_line(db_stats_lines[0]):
-            # Found the start => return True
+            # Not found => Wait for next entries
             return dump_stats_entry_found_now, entry_idx, cf_names_found
 
         # "** DB Stats **" is immediately following "DUMP STATS"
@@ -1136,32 +1156,60 @@ class StatsMngr:
                       f"{format_line_num_from_entry(log_entries[entry_idx])}")
         self.dump_stats_entry_found = False
 
+        start_line_num = db_stats_entry.get_start_line_idx() + 1
+        self.parse_non_db_wide_lines(db_stats_time, db_stats_lines,
+                                     start_line_num, cf_names_found,
+                                     StatsMngr.StatsType.DB_WIDE)
+
+        entry_idx += 1
+        return True, entry_idx, cf_names_found
+
+    def try_adding_cf_stats_entry(self, entry):
+        entry_lines = entry.get_msg_lines()
+        match = StatsMngr.try_parse_cf_stats_line(entry_lines[0])
+        if not match:
+            return False, None
+
+        cf_name = match["cf"]
+        start_line_num = entry.get_start_line_idx() + 1
+        logging.debug(
+            f"Parsing CF Stats Entry ([{cf_name}]) [line# {start_line_num}]")
+
+        self.parse_non_db_wide_lines(
+            time=entry.get_time(),
+            lines=entry_lines,
+            start_line_num=start_line_num,
+            cf_names_found={cf_name},
+            curr_stats_type=StatsMngr.StatsType.CF_STATS)
+        return True, cf_name
+
+    def parse_non_db_wide_lines(self, time, lines, start_line_num,
+                                cf_names_found, curr_stats_type):
         def log_parsing_error(msg_prefix):
             logging.error(format_err_msg(
                 f"{msg_prefix} While parsing Stats Entry. time:"
-                f"{db_stats_time}, cf:{curr_cf_name}",
+                f"{time}, cf:{curr_cf_name}",
                 ErrContext(**{
-                    "log_line_idx":
-                        db_stats_entry.get_start_line_num() + line_idx})))
+                    "log_line_idx": start_line_num + line_idx})))
 
         line_idx = 0
-        stats_type = StatsMngr.StatsType.DB_WIDE
+        stats_type = curr_stats_type
         curr_cf_name = utils.NO_CF
         try:
-            while line_idx < len(db_stats_lines):
+            while line_idx < len(lines):
                 next_line_num, next_stats_type, next_cf_name = \
-                    StatsMngr.find_next_start_line_in_db_stats(db_stats_lines,
+                    StatsMngr.find_next_start_line_in_db_stats(lines,
                                                                line_idx,
                                                                stats_type)
                 # parsing must progress
                 assert next_line_num > line_idx
 
                 self.parse_next_db_stats_entry_lines(
-                    db_stats_time,
+                    time,
                     curr_cf_name,
                     stats_type,
-                    db_stats_entry.get_start_line_num(),
-                    db_stats_lines,
+                    start_line_num,
+                    lines,
                     line_idx,
                     next_line_num)
 
@@ -1179,15 +1227,10 @@ class StatsMngr:
             log_parsing_error("Exception")
             raise
 
-        # Done parsing the stats entry
-        entry_idx += 1
-
-        line_num = format_line_num_from_entry(log_entries[entry_idx]) \
-            if entry_idx < len(log_entries) else \
-            format_line_num_from_line_idx(log_entries[-1].get_end_line_idx())
+        line_num = start_line_num + line_idx
         logging.debug(f"Completed Parsing Stats Dump Entry ({line_num})")
 
-        return True, entry_idx, cf_names_found
+        return cf_names_found
 
     def get_db_wide_stats_mngr(self):
         return self.db_wide_stats_mngr
